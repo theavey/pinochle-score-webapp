@@ -23,7 +23,7 @@
     "audit:prod": "npm audit --omit=dev --audit-level=moderate"
   },
   "dependencies": {
-    "preact": "^10.29.8"
+    "preact": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
