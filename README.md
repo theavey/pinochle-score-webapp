@@ -70,7 +70,7 @@ _separate_ copies, and so do two different phones. Use export/import to move dat
 
 ## Development
 
-Requires Node 22+.
+Requires Node 26 (the current LTS; see [`.nvmrc`](.nvmrc)) and npm 11.
 
 ```sh
 npm install
@@ -88,6 +88,25 @@ The e2e tests serve `dist/` through `wrangler dev`, so the real Cloudflare `_hea
 CI runs them in Chromium (phone and iPad sizes) and in WebKit (iPhone). Run `npm run build` before `npm run test:e2e`.
 
 `scripts/generate-icons.mjs` regenerates the PNG app icons from `public/icon.svg`.
+
+Contributor and coding-agent conventions are in [`AGENTS.md`](AGENTS.md).
+
+### Dependencies
+
+There is one runtime dependency (Preact); everything else is build and test tooling.
+
+- **Cooldown:** new releases aren't adopted until they've been out for a while, which gives a
+  compromised or broken release time to be caught and pulled first.
+  - Dependabot waits 3 days for patch releases, 7 for minor and 14 for major (7 for GitHub Actions).
+  - When adding or upgrading a package by hand, pass the same window:
+    `npm install --min-release-age=7 <package>`.
+- **Security fixes skip the cooldown.** Dependabot security updates ignore it. For a manual
+  security fix, install the patched version directly, without `--min-release-age`. This is why the
+  window isn't set in `.npmrc`: there, it would also block urgent fixes.
+- **Install scripts:** npm only runs install scripts for packages approved under `allowScripts` in
+  `package.json` (currently esbuild and workerd).
+- **Held back on purpose:** TypeScript 7, until typescript-eslint supports it. `@types/node` majors
+  move together with `.nvmrc`.
 
 ### Project layout
 
@@ -120,7 +139,8 @@ The app is a static-assets-only Worker (see [`wrangler.jsonc`](wrangler.jsonc)) 
    `pinochle.theavey.com`. This requires the `theavey.com` DNS zone to be in the same Cloudflare
    account. Cloudflare creates the DNS record and TLS certificate.
 
-After that, every push to `main` deploys automatically. Pull requests get preview builds. No Cloudflare API token is stored in GitHub.
+After that, every push to `main` deploys automatically, and other branches get preview builds
+(Cloudflare can turn these off). No Cloudflare API token is stored in GitHub.
 
 **Manual deploy** (alternative): run `npx wrangler login` once, then `npm run deploy`.
 
@@ -133,7 +153,11 @@ After that, every push to `main` deploys automatically. Pull requests get previe
   - A locked-down `Permissions-Policy`.
 - **Player names are only ever rendered as text** (JSX escaping). Raw-HTML APIs are banned by lint rules, and an e2e test checks that HTML injection doesn't work.
 - **Backup imports are size-capped and schema-validated** (including against `__proto__` tricks).
-- **Dependencies:** CI fails on known vulnerabilities in shipped dependencies (`npm run audit:prod`), and Dependabot keeps everything updated.
+- **Dependencies:**
+  - CI fails on known vulnerabilities in shipped dependencies (`npm run audit:prod`).
+  - Dependabot proposes updates after a cooldown. Turn on _Dependabot security updates_ (repo
+    Settings → Advanced Security) so security fixes skip the wait.
+  - Only approved packages run install scripts. See [Dependencies](#dependencies).
 
 ## Limitations and ideas
 
