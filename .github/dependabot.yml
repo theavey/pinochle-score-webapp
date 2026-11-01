@@ -1,9 +1,17 @@
+# Version updates wait out a cooldown so a compromised or broken release has
+# time to be caught and yanked before we pick it up. Cooldown never applies to
+# Dependabot *security* updates, which open as soon as a fix is published.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-patch-days: 3
+      semver-minor-days: 7
+      semver-major-days: 14
     groups:
       dev-dependencies:
         dependency-type: development
@@ -19,4 +27,6 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+    cooldown:
+      default-days: 7
