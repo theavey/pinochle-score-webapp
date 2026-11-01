@@ -1,0 +1,25 @@
+# Cloudflare Workers static assets: response headers for every path.
+# Strict CSP: only same-origin scripts/styles, no inline script, no framing.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Permissions-Policy: screen-wake-lock=(self), camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+# Hashed build assets never change.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Always revalidate the entry points so updates are picked up.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
