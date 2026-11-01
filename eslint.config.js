@@ -15,6 +15,8 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // False positives for Date.now() inside event handlers; we don't use the React Compiler.
+      'react-hooks/purity': 'off',
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
       // Security: never render raw HTML. All text must go through JSX escaping.
       'no-restricted-syntax': [

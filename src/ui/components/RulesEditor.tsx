@@ -1,0 +1,124 @@
+import { useState } from 'preact/hooks';
+import { parseWhole } from '../../domain/draft';
+import { DEFAULT_RULES, RULE_LIMITS } from '../../domain/rules';
+import type { Rules, ThrowInDefenderScoring } from '../../domain/types';
+import { NumberField } from './NumberField';
+
+interface Props {
+  rules: Rules;
+  onChange: (rules: Rules) => void;
+  idPrefix: string;
+}
+
+type NumKey = 'targetScore' | 'minBid' | 'trickTotal';
+
+export function RulesEditor({ rules, onChange, idPrefix }: Props) {
+  // Keep raw text locally so a half-typed number doesn't get rejected mid-edit.
+  const [text, setText] = useState<Record<NumKey, string>>({
+    targetScore: String(rules.targetScore),
+    minBid: String(rules.minBid),
+    trickTotal: String(rules.trickTotal),
+  });
+
+  const num = (key: NumKey, label: string, step: number) => {
+    const n = parseWhole(text[key]);
+    const lim = RULE_LIMITS[key];
+    const error =
+      n === null
+        ? 'Required'
+        : n < lim.min || n > lim.max
+          ? `Must be ${lim.min}–${lim.max}`
+          : undefined;
+    return (
+      <NumberField
+        id={`${idPrefix}-${key}`}
+        label={label}
+        value={text[key]}
+        step={step}
+        min={lim.min}
+        max={lim.max}
+        start={DEFAULT_RULES[key]}
+        error={error}
+        onChange={(v) => {
+          setText({ ...text, [key]: v });
+          const parsed = parseWhole(v);
+          if (parsed !== null && parsed >= lim.min && parsed <= lim.max) {
+            onChange({ ...rules, [key]: parsed });
+          }
+        }}
+      />
+    );
+  };
+
+  const toggle = (
+    key: 'meldNeedsTrick' | 'bidderGoesOut' | 'stuckDealer' | 'allowThrowIn',
+    label: string,
+    hint: string,
+  ) => (
+    <label class="toggle">
+      <input
+        type="checkbox"
+        checked={rules[key]}
+        onChange={(e) => {
+          onChange({ ...rules, [key]: e.currentTarget.checked });
+        }}
+      />
+      <span>
+        <strong>{label}</strong>
+        <small>{hint}</small>
+      </span>
+    </label>
+  );
+
+  return (
+    <div class="rules-editor">
+      <div class="grid-3">
+        {num('targetScore', 'Play to', 10)}
+        {num('minBid', 'Min bid', 1)}
+        {num('trickTotal', 'Trick pts', 1)}
+      </div>
+      {toggle(
+        'meldNeedsTrick',
+        'Meld needs a trick',
+        'A team’s meld only counts if it takes at least one trick.',
+      )}
+      {toggle(
+        'bidderGoesOut',
+        'Bidder goes out first',
+        'If both teams reach the target on one hand, the bidding team wins if it made its bid.',
+      )}
+      {toggle(
+        'stuckDealer',
+        'Stuck dealer',
+        'If everyone passes, the dealer takes it at the minimum bid.',
+      )}
+      {toggle(
+        'allowThrowIn',
+        'Allow throw-in',
+        'The bidder may concede after meld: bidding team loses the bid.',
+      )}
+      {rules.allowThrowIn && (
+        <div class="field">
+          <label for={`${idPrefix}-throwin`}>On a throw-in, defenders score</label>
+          <select
+            id={`${idPrefix}-throwin`}
+            value={rules.throwInDefenderScoring}
+            onChange={(e) => {
+              onChange({
+                ...rules,
+                throwInDefenderScoring: e.currentTarget.value as ThrowInDefenderScoring,
+              });
+            }}
+          >
+            <option value="meld">Their meld</option>
+            <option value="meldPlusAllTricks">
+              Their meld + all {rules.trickTotal} trick points
+            </option>
+            <option value="nothing">Nothing</option>
+          </select>
+        </div>
+      )}
+      <p class="muted small">Set bidders always lose the amount they bid.</p>
+    </div>
+  );
+}
