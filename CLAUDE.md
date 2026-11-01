@@ -6,7 +6,10 @@ Pinochle scorekeeper: Vite + TypeScript (strict) + Preact, static site on Cloudf
 
 - `npm run check`: lint, typecheck, unit tests, and build. Run it before committing.
 - `npm run test:e2e`: Playwright against `dist/` via `wrangler dev`. Build first. Locally only
-  Chromium is installed; CI also runs WebKit.
+  Chromium is installed; CI also runs WebKit. If the installed Chromium doesn't match the
+  Playwright version, set `PW_CHROMIUM_PATH` to its executable.
+- Node version: see `.nvmrc`. npm only runs install scripts for packages listed under
+  `allowScripts` in `package.json`.
 
 ## Conventions
 

@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 8787;
 const CI = !!process.env.CI;
+// Optional: use an already-installed Chromium instead of the one matching this
+// Playwright version (e.g. in sandboxes where `playwright install` isn't allowed).
+const chromiumPath = process.env.PW_CHROMIUM_PATH;
 
 /**
  * E2E tests run against the production build served by `wrangler dev`, so the
@@ -18,6 +21,7 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {}),
   },
   projects: [
     { name: 'phone', use: { ...devices['Pixel 7'] } },
