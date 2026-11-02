@@ -33,6 +33,11 @@ export default tseslint.config(
           selector: "CallExpression[callee.property.name='insertAdjacentHTML']",
           message: 'Raw HTML is not allowed (XSS risk).',
         },
+        {
+          selector: "JSXOpeningElement[name.name='select']",
+          message:
+            'Use the Choice component: WebKit styles <select> with an internal stylesheet that our CSP blocks.',
+        },
       ],
       'no-eval': 'error',
       'no-implied-eval': 'error',

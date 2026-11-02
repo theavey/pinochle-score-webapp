@@ -9,6 +9,8 @@ test('exports a backup and restores it into an empty browser', async ({ page, br
   await saveHand(page);
 
   await page.goto('/#/settings');
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  expect(errors, 'console errors after opening Settings').toEqual([]);
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export backup' }).click();
   const download = await downloadPromise;

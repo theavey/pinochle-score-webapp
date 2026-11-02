@@ -232,8 +232,7 @@ a {
   cursor: pointer;
 }
 
-input[type='text'],
-select {
+input[type='text'] {
   width: 100%;
   min-height: var(--tap);
   padding: 0 12px;
@@ -444,6 +443,21 @@ select {
 .seg-btn.selected {
   border: 2px solid var(--text);
   font-weight: 700;
+}
+.seg.seg-stack {
+  grid-template-columns: 1fr;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.seg-stack .seg-btn {
+  text-align: left;
+  padding: 0 12px;
+}
+.field-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
 }
 .rules-summary {
   margin: 0;

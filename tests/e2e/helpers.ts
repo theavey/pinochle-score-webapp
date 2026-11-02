@@ -5,7 +5,10 @@ import type { Page } from '@playwright/test';
 export function watchConsole(page: Page): string[] {
   const errors: string[] = [];
   page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text());
+    if (msg.type() === 'error') {
+      const { url, lineNumber } = msg.location();
+      errors.push(url ? `${msg.text()} [at ${url}:${lineNumber}]` : msg.text());
+    }
   });
   page.on('pageerror', (err) => errors.push(err.message));
   return errors;
