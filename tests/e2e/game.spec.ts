@@ -7,7 +7,7 @@ test('plays a full game to 150 with sets, throw-ins and a stuck dealer', async (
 
   // Hand 1: Ann deals; Bob bids 30 and makes it (12 meld + 18 tricks).
   await expect(page.getByRole('button', { name: /Dealer: Ann/ })).toBeVisible();
-  await enterHand(page, { bidder: 'Bob', bid: 30, meld: [8, 12], bidderTricks: 18 });
+  await enterHand(page, { bidder: 'Bob', bid: 30, meld: [8, 12], defenderTricks: 7 });
   await expect(page.getByRole('status').filter({ hasText: 'made it' })).toBeVisible();
   await saveHand(page);
   expect(await totals(page)).toEqual(['15', '30']);
@@ -15,8 +15,8 @@ test('plays a full game to 150 with sets, throw-ins and a stuck dealer', async (
   // Hand 2: Bob deals; Cy bids 35 and is set (10 meld + 20 tricks = 30).
   await expect(page.getByRole('heading', { name: 'Hand 2' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Dealer: Bob/ })).toBeVisible();
-  await enterHand(page, { bidder: 'Cy', bid: 35, meld: [10, 6], bidderTricks: 20 });
-  await expect(page.getByText('SET')).toBeVisible();
+  await enterHand(page, { bidder: 'Cy', bid: 35, meld: [10, 6], defenderTricks: 5 });
+  await expect(page.getByText('SET', { exact: true })).toBeVisible();
   await saveHand(page);
   expect(await totals(page)).toEqual(['−20', '41']);
 
@@ -26,7 +26,7 @@ test('plays a full game to 150 with sets, throw-ins and a stuck dealer', async (
   expect(await totals(page)).toEqual(['−45', '50']);
 
   // Hand 4: Di bids 60 on big meld; Ann & Cy take no tricks and lose their meld.
-  await enterHand(page, { bidder: 'Di', bid: 60, meld: [15, 80], bidderTricks: 25 });
+  await enterHand(page, { bidder: 'Di', bid: 60, meld: [15, 80], defenderTricks: 0 });
   await expect(page.getByText('meld lost')).toBeVisible();
   await saveHand(page);
   expect(await totals(page)).toEqual(['−45', '155']);
@@ -46,13 +46,13 @@ test('plays a full game to 150 with sets, throw-ins and a stuck dealer', async (
 
 test('keeps a half-entered hand and the game across reloads', async ({ page }) => {
   await startGame(page);
-  await enterHand(page, { bidder: 'Ann', bid: 27, meld: [11, 3], bidderTricks: 16 });
+  await enterHand(page, { bidder: 'Ann', bid: 27, meld: [11, 3], defenderTricks: 9 });
   const url = page.url();
 
   await page.reload();
   await expect(page.getByLabel('Bid', { exact: true })).toHaveValue('27');
   await expect(page.getByLabel(/^Meld: Ann & Cy/)).toHaveValue('11');
-  await expect(page.getByLabel(/^Trick points/)).toHaveValue('16');
+  await expect(page.getByLabel(/^Trick points/)).toHaveValue('9');
 
   // Opening the app fresh goes straight back to the game in progress.
   await page.goto('/');
@@ -63,9 +63,9 @@ test('keeps a half-entered hand and the game across reloads', async ({ page }) =
 
 test('fixes an earlier hand and recalculates, with undo', async ({ page }) => {
   await startGame(page);
-  await enterHand(page, { bidder: 'Ann', bid: 25, meld: [10, 5], bidderTricks: 15 });
+  await enterHand(page, { bidder: 'Ann', bid: 25, meld: [10, 5], defenderTricks: 10 });
   await saveHand(page);
-  await enterHand(page, { bidder: 'Bob', bid: 25, meld: [5, 15], bidderTricks: 20 });
+  await enterHand(page, { bidder: 'Bob', bid: 25, meld: [5, 15], defenderTricks: 5 });
   await saveHand(page);
   expect(await totals(page)).toEqual(['35', '50']);
 
@@ -81,7 +81,7 @@ test('fixes an earlier hand and recalculates, with undo', async ({ page }) => {
 
 test('ends a game early with the leader winning', async ({ page }) => {
   await startGame(page);
-  await enterHand(page, { bidder: 'Ann', bid: 25, meld: [10, 5], bidderTricks: 15 });
+  await enterHand(page, { bidder: 'Ann', bid: 25, meld: [10, 5], defenderTricks: 10 });
   await saveHand(page);
   await page.getByRole('button', { name: 'Game menu' }).click();
   await page.getByRole('button', { name: /End game now/ }).click();

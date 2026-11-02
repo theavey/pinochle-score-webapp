@@ -25,12 +25,38 @@ export function getStorage(): Storage | null {
   }
 }
 
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
+
 /**
- * Bring older saved formats up to the current schema. There is only one
- * version so far; future versions add steps here instead of breaking data.
+ * v1 -> v2: the hand-in-progress draft stored the *bidding* team's trick
+ * points (`bidderTricks`); it now stores the *defending* team's
+ * (`defenderTricks`), since they usually have fewer counters to add up.
+ */
+function migrateV1toV2(state: Obj): Obj {
+  const games = Array.isArray(state.games)
+    ? state.games.map((g: unknown) => {
+        if (!isObj(g) || !isObj(g.draft)) return g;
+        const { bidderTricks, ...draft } = g.draft;
+        const total = isObj(g.rules) ? g.rules.trickTotal : undefined;
+        const bt = typeof bidderTricks === 'string' ? /^\d{1,6}$/.exec(bidderTricks.trim()) : null;
+        const n = bt ? Number(bt[0]) : NaN;
+        const defenderTricks = typeof total === 'number' && n <= total ? String(total - n) : '';
+        return { ...g, draft: { ...draft, defenderTricks } };
+      })
+    : state.games;
+  return { ...state, games, schemaVersion: 2 };
+}
+
+/**
+ * Bring older saved formats up to the current schema, one version at a
+ * time. Anything unrecognized is passed through for validation to reject.
  */
 export function migrate(raw: unknown): unknown {
-  return raw;
+  if (!isObj(raw)) return raw;
+  let state = raw;
+  if (state.schemaVersion === 1) state = migrateV1toV2(state);
+  return state;
 }
 
 export function loadState(storage: Storage | null): LoadResult {

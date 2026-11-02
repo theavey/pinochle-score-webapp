@@ -5,7 +5,7 @@ import { enterHand, saveHand, startGame, watchConsole } from './helpers';
 test('exports a backup and restores it into an empty browser', async ({ page, browser }) => {
   const errors = watchConsole(page);
   await startGame(page);
-  await enterHand(page, { bidder: 'Ann', bid: 25, meld: [10, 5], bidderTricks: 15 });
+  await enterHand(page, { bidder: 'Ann', bid: 25, meld: [10, 5], defenderTricks: 10 });
   await saveHand(page);
 
   await page.goto('/#/settings');

@@ -86,8 +86,11 @@ export interface HandDraft {
   bid: string;
   stuck: boolean;
   meld: TeamPair<string>;
-  /** Trick points for the bidding team; the other team gets the remainder. */
-  bidderTricks: string;
+  /**
+   * Trick points for the defending (non-bidding) team, who usually have fewer
+   * counters to add up; the bidding team gets the remainder.
+   */
+  defenderTricks: string;
   tookTrick: TeamPair<boolean>;
   thrownIn: boolean;
 }
@@ -109,7 +112,7 @@ export interface Settings {
   keepAwake: boolean;
 }
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface AppState {
   schemaVersion: typeof SCHEMA_VERSION;

@@ -76,7 +76,7 @@ const draft: Validator<HandDraft> = obj({
   bid: draftText,
   stuck: bool,
   meld: tuple2(draftText),
-  bidderTricks: draftText,
+  defenderTricks: draftText,
   tookTrick: tuple2(bool),
   thrownIn: bool,
 });
