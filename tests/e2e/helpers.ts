@@ -38,7 +38,8 @@ export interface HandEntry {
   bid?: number;
   stuck?: boolean;
   meld: [number, number];
-  bidderTricks?: number;
+  /** Trick points for the defending (non-bidding) team. */
+  defenderTricks?: number;
   throwIn?: boolean;
 }
 
@@ -58,7 +59,7 @@ export async function enterHand(page: Page, h: HandEntry) {
   if (h.throwIn) {
     await form.getByRole('checkbox', { name: /throws in/ }).check();
   } else {
-    await form.getByLabel(/^Trick points/).fill(String(h.bidderTricks));
+    await form.getByLabel(/^Trick points/).fill(String(h.defenderTricks));
   }
 }
 

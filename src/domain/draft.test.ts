@@ -28,7 +28,7 @@ describe('parseWhole', () => {
 describe('parseDraft', () => {
   it('builds a played hand and fills in the other team’s tricks', () => {
     const res = parseDraft(
-      draft({ bidder: 1, bid: '30', meld: ['8', '12'], bidderTricks: '18' }),
+      draft({ bidder: 1, bid: '30', meld: ['8', '12'], defenderTricks: '7' }),
       R,
       P,
     );
@@ -44,7 +44,7 @@ describe('parseDraft', () => {
         bidder: 0,
         bid: '25',
         meld: ['10', '5'],
-        bidderTricks: '25',
+        defenderTricks: '0',
         tookTrick: [false, true],
       }),
       R,
@@ -67,7 +67,7 @@ describe('parseDraft', () => {
 
   it('enforces the minimum bid and trick total', () => {
     const res = parseDraft(
-      draft({ bidder: 0, bid: '20', meld: ['0', '0'], bidderTricks: '26' }),
+      draft({ bidder: 0, bid: '20', meld: ['0', '0'], defenderTricks: '26' }),
       R,
       P,
     );
@@ -88,7 +88,7 @@ describe('parseDraft', () => {
   });
 
   it('round-trips through draftFromHand', () => {
-    const d = draft({ bidder: 3, bid: '31', meld: ['6', '14'], bidderTricks: '17', dealer: 2 });
+    const d = draft({ bidder: 3, bid: '31', meld: ['6', '14'], defenderTricks: '8', dealer: 2 });
     const res = parseDraft(d, R, P);
     if (!res.ok) throw new Error('expected ok');
     const back = draftFromHand({ ...res.hand, id: 'x', createdAt: 0 });
@@ -98,7 +98,7 @@ describe('parseDraft', () => {
       bidder: 3,
       bid: '31',
       meld: ['6', '14'],
-      bidderTricks: '17',
+      defenderTricks: '8',
     });
   });
 });

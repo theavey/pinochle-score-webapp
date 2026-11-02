@@ -10,7 +10,7 @@ Planned home: **https://pinochle.theavey.com** (Cloudflare Workers, static asset
 ## Features
 
 - **Setup:** seat 4 players on a table diagram (partners sit across), then pick or randomize the first dealer.
-- **Hand entry:** pick the bidder (in bidding order from the dealer's left), then enter the bid, each team's meld, and the bidding team's trick points. The other team's tricks fill in automatically.
+- **Hand entry:** pick the bidder (in bidding order from the dealer's left), then enter the bid, each team's meld, and the defending (non-bidding) team's trick points, since they usually have fewer counters to add up. The bidding team's tricks fill in automatically.
   - A live preview shows the score change, and _set_ / _meld lost_ are flagged.
   - One-tap "everyone passed, dealer stuck" and a throw-in checkbox.
   - A "took a trick with no counters" option saves meld when a team has 0 trick points.

@@ -47,23 +47,23 @@ export function HandForm({ game, nextDealer, handNumber }: Props) {
   const d = b === null ? null : otherTeam(b);
   const bid = parseWhole(draft.bid);
   const bidderMeld = b === null ? null : parseWhole(draft.meld[b]);
-  const bidderTricks = parseWhole(draft.bidderTricks);
+  const defenderTricks = parseWhole(draft.defenderTricks);
   const tricksFor = (t: Team): number | null => {
-    if (b === null || bidderTricks === null || bidderTricks > rules.trickTotal) return null;
-    return t === b ? bidderTricks : rules.trickTotal - bidderTricks;
+    if (d === null || defenderTricks === null || defenderTricks > rules.trickTotal) return null;
+    return t === d ? defenderTricks : rules.trickTotal - defenderTricks;
   };
 
   let tricksHint: string | undefined;
   if (bid !== null && bidderMeld !== null && b !== null) {
     const need = bid - bidderMeld;
     if (need > rules.trickTotal) {
-      tricksHint = `Needs ${need}, only ${rules.trickTotal} available${rules.allowThrowIn ? ' (consider throwing in)' : ''}`;
+      tricksHint = `Bidders need ${need}, only ${rules.trickTotal} available${rules.allowThrowIn ? ' (consider throwing in)' : ''}`;
     } else if (need <= 0) {
       tricksHint = rules.meldNeedsTrick
-        ? 'Meld covers the bid; just take a trick'
+        ? 'Meld covers the bid; bidders just need a trick'
         : 'Meld covers the bid';
     } else {
-      tricksHint = `Needs ${need} to make the bid`;
+      tricksHint = `Bidders need ${need}: set if this is over ${rules.trickTotal - need}`;
     }
   }
 
@@ -183,18 +183,18 @@ export function HandForm({ game, nextDealer, handNumber }: Props) {
         <>
           <NumberField
             id="tricks"
-            label={`Trick points: ${tname(b)}`}
-            value={draft.bidderTricks}
-            start={Math.min(rules.trickTotal, Math.max(0, (bid ?? 0) - (bidderMeld ?? 0)))}
+            label={`Trick points: ${tname(d)} (defending)`}
+            value={draft.defenderTricks}
+            start={0}
             max={rules.trickTotal}
             error={errors.tricks}
             hint={tricksHint}
             onChange={(v) => {
-              update({ bidderTricks: v });
+              update({ defenderTricks: v });
             }}
           />
           <p class="other-tricks">
-            {tname(d)}: <strong>{tricksFor(d) ?? '–'}</strong> trick points
+            {tname(b)} (bid): <strong>{tricksFor(b) ?? '–'}</strong> trick points
           </p>
           {rules.meldNeedsTrick &&
             ([b, d] as const).map((t) =>

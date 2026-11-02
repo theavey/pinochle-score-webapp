@@ -73,7 +73,7 @@ function sample(): AppState {
         bid: '27',
         stuck: false,
         meld: ['10', ''],
-        bidderTricks: '',
+        defenderTricks: '',
         tookTrick: [false, false],
         thrownIn: false,
       },
@@ -209,5 +209,58 @@ describe('backup', () => {
       games: sample().games.map((g) => ({ ...g, hands: [], updatedAt: 0 })),
     };
     expect(mergeStates(current, stale).games.find((g) => g.id === 'g1')?.hands).toHaveLength(1);
+  });
+});
+
+describe('migration v1 -> v2', () => {
+  /** A v1 save: the draft stored the bidding team's trick points. */
+  function v1(draftPatch: Record<string, unknown>): string {
+    const s = JSON.parse(JSON.stringify(sample())) as {
+      schemaVersion: number;
+      games: { draft: Record<string, unknown> }[];
+    };
+    s.schemaVersion = 1;
+    const g = s.games[0];
+    if (!g) throw new Error('sample has a game');
+    const rest = { ...g.draft };
+    delete rest.defenderTricks;
+    g.draft = { ...rest, bidderTricks: '', ...draftPatch };
+    return JSON.stringify(s);
+  }
+
+  it('converts a half-entered hand to the defending team’s trick points', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(STORAGE_KEY, v1({ bidder: 0, bidderTricks: '18' }));
+    const res = loadState(storage);
+    expect(res.warning).toBeNull();
+    expect(res.state.schemaVersion).toBe(2);
+    // 25 trick points per hand: bidders had 18, so defenders had 7.
+    expect(res.state.games[0]?.draft?.defenderTricks).toBe('7');
+    expect(res.state.games[0]?.draft).not.toHaveProperty('bidderTricks');
+    // Everything else is untouched.
+    expect(res.state.games[0]?.hands).toEqual(sample().games[0]?.hands);
+  });
+
+  it('clears trick points it cannot convert', () => {
+    for (const bidderTricks of ['', 'x', '99']) {
+      const storage = new MemoryStorage();
+      storage.setItem(STORAGE_KEY, v1({ bidderTricks }));
+      expect(loadState(storage).state.games[0]?.draft?.defenderTricks).toBe('');
+    }
+  });
+
+  it('imports a v1 backup', () => {
+    const text = JSON.stringify({
+      format: 'pinochle-score-backup',
+      exportedAt: '2026-11-01T00:00:00.000Z',
+      data: JSON.parse(v1({ bidderTricks: '20' })) as unknown,
+    });
+    expect(parseBackup(text).games[0]?.draft?.defenderTricks).toBe('5');
+  });
+
+  it('rejects data from a newer, unknown version', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(STORAGE_KEY, JSON.stringify({ ...sample(), schemaVersion: 99 }));
+    expect(loadState(storage).warning).toMatch(/set aside/);
   });
 });

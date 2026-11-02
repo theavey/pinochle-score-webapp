@@ -10,7 +10,7 @@ export function emptyDraft(dealer: Seat): HandDraft {
     bid: '',
     stuck: false,
     meld: ['', ''],
-    bidderTricks: '',
+    defenderTricks: '',
     tookTrick: [false, false],
     thrownIn: false,
   };
@@ -25,7 +25,7 @@ export function draftFromHand(hand: Hand): HandDraft {
     bid: String(hand.bid),
     stuck: hand.stuck,
     meld: [String(hand.meld[0]), String(hand.meld[1])],
-    bidderTricks: hand.kind === 'played' ? String(hand.tricks[b]) : '',
+    defenderTricks: hand.kind === 'played' ? String(hand.tricks[otherTeam(b)]) : '',
     tookTrick: hand.kind === 'played' ? [...hand.tookTrick] : [false, false],
     thrownIn: hand.kind === 'thrownIn',
   };
@@ -79,14 +79,14 @@ export function parseDraft(
 
   let tricks: TeamPair<number> = [0, 0];
   if (!draft.thrownIn && draft.bidder !== null) {
-    const bt = parseWhole(draft.bidderTricks);
-    if (bt === null) errors.tricks = 'Enter trick points';
-    else if (bt > rules.trickTotal) errors.tricks = `Trick points can't exceed ${rules.trickTotal}`;
+    const dt = parseWhole(draft.defenderTricks);
+    if (dt === null) errors.tricks = 'Enter trick points';
+    else if (dt > rules.trickTotal) errors.tricks = `Trick points can't exceed ${rules.trickTotal}`;
     else {
-      const b = teamOf(draft.bidder);
+      const d = otherTeam(teamOf(draft.bidder));
       tricks = [0, 0];
-      tricks[b] = bt;
-      tricks[otherTeam(b)] = rules.trickTotal - bt;
+      tricks[d] = dt;
+      tricks[otherTeam(d)] = rules.trickTotal - dt;
     }
   }
 
