@@ -75,6 +75,9 @@ Never write code that could overwrite data the app failed to read.
 
 - Mobile first: tap targets of at least 44px, and inputs at 16px or larger (otherwise iOS zooms in).
 - Use the `NumberField` component for numeric entry.
+- Use the `Choice` component instead of `<select>`. WebKit styles `<select>` with an internal
+  stylesheet that the CSP blocks; ESLint bans it, and `tests/e2e/csp-elements.spec.ts` probes
+  native elements under the real CSP.
 - Support light and dark mode via the CSS variables in `src/styles.css`.
 
 ## Dependencies

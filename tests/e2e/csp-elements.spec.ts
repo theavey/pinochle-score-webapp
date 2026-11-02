@@ -5,7 +5,8 @@ import { expect, test } from '@playwright/test';
  * Some browsers implement built-in controls with internal stylesheets that a
  * strict CSP can block (seen in WebKit on the Settings page). Render each
  * native element the app uses, alone, under the production CSP, and require
- * that none of them triggers a CSP violation.
+ * that none of them triggers a CSP violation. (<select> is not used for this
+ * reason: WebKit's built-in select styling is blocked. ESLint bans it.)
  */
 const csp =
   /Content-Security-Policy: (.+)/.exec(readFileSync('public/_headers', 'utf8'))?.[1] ?? '';
@@ -13,7 +14,6 @@ const csp =
 const ELEMENTS: Record<string, string> = {
   details: '<details><summary>More</summary><p>Body</p></details>',
   fileInput: '<label>Import <input type="file" accept="application/json,.json"></label>',
-  select: '<select><option>One</option><option>Two</option></select>',
   checkbox: '<label><input type="checkbox"> Toggle</label>',
   textInput: '<input type="text" inputmode="numeric" pattern="[0-9]*">',
   dialog: '<dialog><p>Closed dialog</p></dialog>',

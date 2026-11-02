@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { parseWhole } from '../../domain/draft';
 import { DEFAULT_RULES, RULE_LIMITS } from '../../domain/rules';
 import type { Rules, ThrowInDefenderScoring } from '../../domain/types';
+import { Choice } from './Choice';
 import { NumberField } from './NumberField';
 
 interface Props {
@@ -99,23 +100,23 @@ export function RulesEditor({ rules, onChange, idPrefix }: Props) {
       )}
       {rules.allowThrowIn && (
         <div class="field">
-          <label for={`${idPrefix}-throwin`}>On a throw-in, defenders score</label>
-          <select
-            id={`${idPrefix}-throwin`}
+          <span class="field-label">On a throw-in, defenders score</span>
+          <Choice
+            label="On a throw-in, defenders score"
+            stacked
             value={rules.throwInDefenderScoring}
-            onChange={(e) => {
-              onChange({
-                ...rules,
-                throwInDefenderScoring: e.currentTarget.value as ThrowInDefenderScoring,
-              });
+            options={[
+              { value: 'meld', label: 'Their meld' },
+              {
+                value: 'meldPlusAllTricks',
+                label: `Their meld + all ${rules.trickTotal} trick points`,
+              },
+              { value: 'nothing', label: 'Nothing' },
+            ]}
+            onChange={(v: ThrowInDefenderScoring) => {
+              onChange({ ...rules, throwInDefenderScoring: v });
             }}
-          >
-            <option value="meld">Their meld</option>
-            <option value="meldPlusAllTricks">
-              Their meld + all {rules.trickTotal} trick points
-            </option>
-            <option value="nothing">Nothing</option>
-          </select>
+          />
         </div>
       )}
       <p class="muted small">Set bidders always lose the amount they bid.</p>

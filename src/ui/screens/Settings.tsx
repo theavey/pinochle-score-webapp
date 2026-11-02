@@ -3,6 +3,7 @@ import { MAX_NAME_LENGTH } from '../../domain/reducer';
 import type { AppState, Player, Rules } from '../../domain/types';
 import { backupFileName, exportBackup, mergeStates, parseBackup } from '../../storage/backup';
 import { requestPersistence } from '../../storage/persist';
+import { Choice } from '../components/Choice';
 import { Dialog } from '../components/Dialog';
 import { RulesEditor } from '../components/RulesEditor';
 import { href } from '../router';
@@ -102,42 +103,32 @@ function PlayersSection() {
               </button>
             </form>
             <div class="field">
-              <label for="merge-into">Same person as…</label>
-              <div class="row">
-                <select
-                  id="merge-into"
-                  class="grow"
-                  value={mergeInto}
-                  onChange={(e) => {
-                    setMergeInto(e.currentTarget.value);
-                  }}
-                >
-                  <option value="">Choose a player</option>
-                  {sorted
-                    .filter((p) => p.id !== editing.id)
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                </select>
-                <button
-                  type="button"
-                  class="btn"
-                  disabled={!mergeInto}
-                  onClick={() => {
-                    if (
-                      dispatch(
-                        { type: 'mergePlayers', from: editing.id, into: mergeInto },
-                        `Merged ${editing.name}`,
-                      )
+              <span class="field-label">Same person as…</span>
+              <Choice
+                label={`Merge ${editing.name} into`}
+                stacked
+                value={mergeInto || null}
+                options={sorted
+                  .filter((p) => p.id !== editing.id)
+                  .map((p) => ({ value: p.id, label: p.name }))}
+                onChange={setMergeInto}
+              />
+              <button
+                type="button"
+                class="btn"
+                disabled={!mergeInto}
+                onClick={() => {
+                  if (
+                    dispatch(
+                      { type: 'mergePlayers', from: editing.id, into: mergeInto },
+                      `Merged ${editing.name}`,
                     )
-                      close();
-                  }}
-                >
-                  Merge
-                </button>
-              </div>
+                  )
+                    close();
+                }}
+              >
+                Merge
+              </button>
               <p class="field-hint">Moves all of {editing.name}’s games to the chosen player.</p>
             </div>
             <button
