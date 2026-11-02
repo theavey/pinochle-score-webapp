@@ -133,9 +133,11 @@ The app is a static-assets-only Worker (see [`wrangler.jsonc`](wrangler.jsonc)) 
 **One-time setup (Cloudflare dashboard, recommended):**
 
 1. _Workers & Pages → Create → Import a repository_, then choose `theavey/pinochle-score-webapp`.
-2. Build command: `npm ci && npm run build`. Deploy command: `npx wrangler deploy`.
-   Production branch: `main`.
-3. After the first deploy: open the _pinochle-score_ Worker, go to _Settings → Domains & Routes_, choose _Add → Custom domain_, and enter
+2. Name the Worker `pinochle-score-webapp` (it must match `name` in `wrangler.jsonc`). Leave the
+   defaults: the deploy command is `npx wrangler deploy`, and the production branch is `main`. No build
+   command is needed, because `wrangler.jsonc` runs `npm run build` before every deploy or preview
+   upload. Node and npm versions come from `.nvmrc` and `packageManager` in `package.json`.
+3. After the first deploy: open the _pinochle-score-webapp_ Worker, go to _Settings → Domains & Routes_, choose _Add → Custom domain_, and enter
    `pinochle.theavey.com`. This requires the `theavey.com` DNS zone to be in the same Cloudflare
    account. Cloudflare creates the DNS record and TLS certificate.
 

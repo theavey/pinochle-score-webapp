@@ -2,16 +2,23 @@
 // Docs: https://developers.cloudflare.com/workers/static-assets/
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pinochle-score",
+  // Must match the Worker's name in the Cloudflare dashboard.
+  "name": "pinochle-score-webapp",
   "compatibility_date": "2026-10-01",
+  // `wrangler deploy`, `wrangler versions upload` and `wrangler dev` build the
+  // site first, so Cloudflare's Git builds work even with no build command set.
+  "build": {
+    "command": "npm run build",
+    "watch_dir": ["src", "public", "scripts", "index.html"],
+  },
   "assets": {
     "directory": "./dist",
     // The app uses #/ hash routes, so unknown paths can simply 404.
     "not_found_handling": "none",
   },
   // Custom domain: add "pinochle.theavey.com" in the Cloudflare dashboard
-  // (Workers & Pages → pinochle-score → Settings → Domains & Routes), or
-  // uncomment once the theavey.com zone is on this account:
+  // (Workers & Pages → pinochle-score-webapp → Settings → Domains & Routes),
+  // or uncomment once the theavey.com zone is on this account:
   // "routes": [{ "pattern": "pinochle.theavey.com", "custom_domain": true }],
   "workers_dev": true,
   "observability": { "enabled": false },

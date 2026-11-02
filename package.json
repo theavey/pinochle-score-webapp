@@ -8,6 +8,7 @@
   "engines": {
     "node": ">=26"
   },
+  "packageManager": "npm@11.20.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

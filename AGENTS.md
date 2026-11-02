@@ -94,6 +94,9 @@ Never write code that could overwrite data the app failed to read.
 
 ## Workflow
 
+- **Deploys:** Cloudflare Workers Builds deploys `main` and uploads preview versions for other
+  branches. `wrangler.jsonc` runs `npm run build` itself (`build.command`). The Worker `name` must
+  match the dashboard (`pinochle-score-webapp`). Node comes from `.nvmrc`, npm from `packageManager`.
 - **Branches and commits:** work on a branch and open a PR into `main`. CI (lint, typecheck, unit,
   build, prod audit, e2e in Chromium and WebKit) must be green before merging. Pushing to `main`
   deploys to production through Cloudflare.
