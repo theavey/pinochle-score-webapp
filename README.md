@@ -142,6 +142,7 @@ The app is a static-assets-only Worker (see [`wrangler.jsonc`](wrangler.jsonc)) 
    account. Cloudflare creates the DNS record and TLS certificate.
 
 After that, every push to `main` deploys automatically, and other branches get preview builds
+(via `npx wrangler preview`; the empty `previews` block in `wrangler.jsonc` enables it)
 (Cloudflare can turn these off). No Cloudflare API token is stored in GitHub.
 
 **Manual deploy** (alternative): run `npx wrangler login` once, then `npm run deploy`.

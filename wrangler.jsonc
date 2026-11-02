@@ -20,6 +20,10 @@
   // (Workers & Pages → pinochle-score-webapp → Settings → Domains & Routes),
   // or uncomment once the theavey.com zone is on this account:
   // "routes": [{ "pattern": "pinochle.theavey.com", "custom_domain": true }],
+  // Pull-request previews (`wrangler preview`, used by Workers Builds for
+  // non-production branches) require this block; it can stay empty.
+  // https://developers.cloudflare.com/workers/previews/configuration/
+  "previews": {},
   "workers_dev": true,
   "observability": { "enabled": false },
 }
