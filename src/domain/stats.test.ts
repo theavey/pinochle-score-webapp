@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RULES } from './rules';
-import { computeStats } from './stats';
-import type { Game, PlayedHand, SeatQuad } from './types';
+import { bidsMadeRate, computeStats } from './stats';
+import type { Game, Hand, PlayedHand, SeatQuad, ThrownInHand } from './types';
 
 const seats: SeatQuad<string> = ['a', 'b', 'c', 'd'];
 
@@ -22,7 +22,7 @@ function h(p: Partial<PlayedHand>): PlayedHand {
   };
 }
 
-function g(hands: PlayedHand[], extra: Partial<Game> = {}): Game {
+function g(hands: Hand[], extra: Partial<Game> = {}): Game {
   return {
     id: Math.random().toString(),
     createdAt: 0,
@@ -36,6 +36,33 @@ function g(hands: PlayedHand[], extra: Partial<Game> = {}): Game {
     ...extra,
   };
 }
+
+describe('bidsMadeRate', () => {
+  it('counts throw-ins (and sets) as bids not made', () => {
+    const t: ThrownInHand = {
+      kind: 'thrownIn',
+      id: 't',
+      createdAt: 0,
+      dealer: 0,
+      players: seats,
+      bidder: 0,
+      bid: 25,
+      stuck: true,
+      meld: [5, 5],
+    };
+    const { players } = computeStats([
+      g([
+        h({ bidder: 0, bid: 25, meld: [20, 0] }), // made
+        h({ bidder: 0, bid: 40, meld: [0, 0] }), // set
+        t, // thrown in
+      ]),
+    ]);
+    const a = players.get('a');
+    if (!a) throw new Error('expected stats for a');
+    expect(a).toMatchObject({ bidsWon: 3, bidsMade: 1, bidsSet: 1, throwIns: 1 });
+    expect(bidsMadeRate(a)).toEqual({ made: 1, of: 3 });
+  });
+});
 
 describe('computeStats', () => {
   it('credits bids to the bidder and wins to the team', () => {

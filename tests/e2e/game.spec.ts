@@ -40,6 +40,8 @@ test('plays a full game to 150 with sets, throw-ins and a stuck dealer', async (
   await page.getByRole('link', { name: 'Stats' }).click();
   await expect(page.getByRole('row', { name: /^Bob 1–0/ })).toBeVisible();
   await expect(page.getByRole('row', { name: /^Cy 0–1/ })).toBeVisible();
+  // Cy bid twice: set once, threw in once. Both count as not made.
+  await expect(page.getByRole('row', { name: /^Cy 0–1 0% 2 0%/ })).toBeVisible();
 
   expect(errors).toEqual([]);
 });

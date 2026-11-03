@@ -17,6 +17,14 @@ export interface PlayerStats {
   highestBid: number;
 }
 
+/**
+ * Bids made out of all bids taken. A throw-in is a bid that wasn't made, so it
+ * counts against the rate just like being set.
+ */
+export function bidsMadeRate(s: PlayerStats): { made: number; of: number } {
+  return { made: s.bidsMade, of: s.bidsWon };
+}
+
 export interface PartnershipStats {
   players: [PlayerId, PlayerId];
   games: number;
