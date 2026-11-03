@@ -1,7 +1,12 @@
-import { computeStats } from '../../domain/stats';
+import { bidsMadeRate, computeStats } from '../../domain/stats';
 import { pct, playerName } from '../format';
 import { href } from '../router';
 import { useStore } from '../store';
+
+function madePct(s: Parameters<typeof bidsMadeRate>[0]): string {
+  const { made, of } = bidsMadeRate(s);
+  return pct(made, of);
+}
 
 export function Stats() {
   const { state } = useStore();
@@ -42,7 +47,11 @@ export function Stats() {
                   <th scope="col" class="num" title="Bids taken">
                     Bids
                   </th>
-                  <th scope="col" class="num" title="Bids made (excludes throw-ins)">
+                  <th
+                    scope="col"
+                    class="num"
+                    title="Bids made, out of all bids taken (throw-ins count as not made)"
+                  >
                     Made
                   </th>
                   <th scope="col" class="num">
@@ -62,7 +71,7 @@ export function Stats() {
                     </td>
                     <td class="num">{pct(r.wins, r.decided)}</td>
                     <td class="num">{r.bidsWon}</td>
-                    <td class="num">{pct(r.bidsMade, r.bidsMade + r.bidsSet)}</td>
+                    <td class="num">{madePct(r)}</td>
                     <td class="num">{r.bidsWon ? Math.round(r.totalBid / r.bidsWon) : '–'}</td>
                     <td class="num">{r.highestBid || '–'}</td>
                   </tr>

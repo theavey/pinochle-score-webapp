@@ -5,6 +5,7 @@ const CI = !!process.env.CI;
 // Optional: use an already-installed Chromium instead of the one matching this
 // Playwright version (e.g. in sandboxes where `playwright install` isn't allowed).
 const chromiumPath = process.env.PW_CHROMIUM_PATH;
+const UPDATE_SPEC = /update\.spec\.ts$/;
 
 /**
  * E2E tests run against the production build served by `wrangler dev`, so the
@@ -24,10 +25,34 @@ export default defineConfig({
     ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {}),
   },
   projects: [
-    { name: 'phone', use: { ...devices['Pixel 7'] } },
-    { name: 'tablet', use: { ...devices['iPad (gen 7)'], browserName: 'chromium' } },
+    { name: 'phone', use: { ...devices['Pixel 7'] }, testIgnore: UPDATE_SPEC },
+    {
+      name: 'tablet',
+      use: { ...devices['iPad (gen 7)'], browserName: 'chromium' },
+      testIgnore: UPDATE_SPEC,
+    },
     // iOS Safari is the main target; WebKit is installed in CI.
-    ...(CI ? [{ name: 'iphone-webkit', use: { ...devices['iPhone 13'] } }] : []),
+    ...(CI
+      ? [{ name: 'iphone-webkit', use: { ...devices['iPhone 13'] }, testIgnore: UPDATE_SPEC }]
+      : []),
+    // The update test simulates a deploy by rewriting dist/sw.js on the shared
+    // server, so it runs alone, after everything else, one browser at a time.
+    {
+      name: 'update-chromium',
+      use: { ...devices['Pixel 7'] },
+      testMatch: UPDATE_SPEC,
+      dependencies: ['phone', 'tablet', ...(CI ? ['iphone-webkit'] : [])],
+    },
+    ...(CI
+      ? [
+          {
+            name: 'update-webkit',
+            use: { ...devices['iPhone 13'] },
+            testMatch: UPDATE_SPEC,
+            dependencies: ['update-chromium'],
+          },
+        ]
+      : []),
   ],
   webServer: {
     command: `npx wrangler dev --port ${PORT} --ip 127.0.0.1`,
