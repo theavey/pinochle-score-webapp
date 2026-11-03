@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { emptyDraft, parseDraft, parseWhole } from '../../../domain/draft';
+import { draftBidSummary, emptyDraft, parseDraft, parseWhole } from '../../../domain/draft';
 import { scoreHand } from '../../../domain/scoring';
 import { biddingOrder, otherTeam, teamOf } from '../../../domain/seats';
 import type { Game, HandDraft, Seat, Team } from '../../../domain/types';
@@ -46,7 +46,7 @@ export function HandForm({ game, nextDealer, handNumber }: Props) {
   const b = draft.bidder === null ? null : teamOf(draft.bidder);
   const d = b === null ? null : otherTeam(b);
   const bid = parseWhole(draft.bid);
-  const bidderMeld = b === null ? null : parseWhole(draft.meld[b]);
+  const need = draftBidSummary(draft)?.need ?? null;
   const defenderTricks = parseWhole(draft.defenderTricks);
   const tricksFor = (t: Team): number | null => {
     if (d === null || defenderTricks === null || defenderTricks > rules.trickTotal) return null;
@@ -54,8 +54,7 @@ export function HandForm({ game, nextDealer, handNumber }: Props) {
   };
 
   let tricksHint: string | undefined;
-  if (bid !== null && bidderMeld !== null && b !== null) {
-    const need = bid - bidderMeld;
+  if (need !== null) {
     if (need > rules.trickTotal) {
       tricksHint = `Bidders need ${need}, only ${rules.trickTotal} available${rules.allowThrowIn ? ' (consider throwing in)' : ''}`;
     } else if (need <= 0) {

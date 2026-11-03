@@ -121,3 +121,30 @@ export function parseDraft(
     },
   };
 }
+
+export interface BidSummary {
+  bidder: Seat;
+  bid: number;
+  stuck: boolean;
+  thrownIn: boolean;
+  /**
+   * Trick points the bidding team still needs (bid minus their meld), or null
+   * until their meld is entered. Zero or less means the meld covers the bid.
+   */
+  need: number | null;
+}
+
+/** What's known so far about the bid in a hand being entered, or null if no bid yet. */
+export function draftBidSummary(draft: HandDraft): BidSummary | null {
+  if (draft.bidder === null) return null;
+  const bid = parseWhole(draft.bid);
+  if (bid === null) return null;
+  const meld = parseWhole(draft.meld[teamOf(draft.bidder)]);
+  return {
+    bidder: draft.bidder,
+    bid,
+    stuck: draft.stuck,
+    thrownIn: draft.thrownIn,
+    need: meld === null ? null : bid - meld,
+  };
+}

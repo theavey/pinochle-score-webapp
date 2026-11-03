@@ -15,6 +15,10 @@ Planned home: **https://pinochle.theavey.com** (Cloudflare Workers, static asset
   - One-tap "everyone passed, dealer stuck" and a throw-in checkbox.
   - A "took a trick with no counters" option saves meld when a team has 0 trick points.
 - **Nothing gets lost:** every keystroke is saved, including a half-entered hand. Reloading, switching apps or the phone killing the browser are all fine. Reopening the app returns you to the game in progress.
+- **Table display:** a big, glanceable score for everyone at the table, showing both totals, the
+  current bid as it's entered ("Bob bid 30 · needs 18") and the last hand's result. Tap **Show table**
+  on any device. A phone also switches to it when turned sideways; tap **Scoresheet** to enter hands
+  sideways instead. An iPad shows more, and stays on the scoresheet in landscape.
 - **Fix mistakes:** tap any earlier hand to edit or delete it, and every later total is recalculated. Undo is available after each save.
 - **Mid-game changes:**
   - Change the target or rules.

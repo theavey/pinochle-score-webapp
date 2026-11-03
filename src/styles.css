@@ -980,3 +980,137 @@ details summary {
     display: none;
   }
 }
+
+/* ---------- Top bar actions ---------- */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- Table display ---------- */
+.table-view {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1.5vh;
+  padding: calc(env(safe-area-inset-top) + 1.5vh) max(16px, env(safe-area-inset-right))
+    calc(env(safe-area-inset-bottom) + 2vh) max(16px, env(safe-area-inset-left));
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+.tv-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.tv-meta {
+  color: var(--muted);
+  font-size: clamp(0.9rem, 2.6vh, 1.4rem);
+}
+.tv-teams {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2vw;
+  min-height: 0;
+}
+.tv-team {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  padding: 1vh 2vw;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.tv-team.team-0 {
+  border-top: 6px solid var(--team0);
+}
+.tv-team.team-1 {
+  border-top: 6px solid var(--team1);
+}
+.tv-team.winner {
+  outline: 4px solid var(--primary);
+}
+.tv-name {
+  font-weight: 700;
+  font-size: clamp(1rem, 5vh, 2.6rem);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tv-team.team-0 .tv-name {
+  color: var(--team0);
+}
+.tv-team.team-1 .tv-name {
+  color: var(--team1);
+}
+.tv-total {
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-size: min(30vh, 17vw);
+  letter-spacing: -0.02em;
+}
+.tv-team .progress {
+  width: 80%;
+  height: max(6px, 1.2vh);
+  margin: 1vh 0;
+}
+.tv-need {
+  color: var(--muted);
+  font-size: clamp(0.9rem, 3.2vh, 1.8rem);
+}
+.tv-info {
+  display: grid;
+  gap: 0.6vh;
+  text-align: center;
+}
+.tv-line {
+  margin: 0;
+  font-size: clamp(1rem, 4.2vh, 2.4rem);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tv-last {
+  color: var(--muted);
+  font-weight: 500;
+}
+.tv-last.tv-set > span:first-child {
+  color: var(--danger);
+}
+.tv-deltas {
+  font-variant-numeric: tabular-nums;
+}
+.tv-banner {
+  color: var(--primary);
+}
+
+/* Phone turned sideways: little height, so show the totals plus one line
+   (the live bid if there is one, otherwise the last hand). */
+@media (max-height: 500px) {
+  .table-view {
+    gap: 1vh;
+  }
+  .table-view.has-bid .tv-last {
+    display: none;
+  }
+  .tv-total {
+    font-size: min(38vh, 17vw);
+  }
+  .tv-line {
+    font-size: clamp(0.95rem, 6vh, 1.6rem);
+  }
+  .tv-name {
+    font-size: clamp(0.95rem, 6vh, 1.6rem);
+  }
+}

@@ -38,14 +38,14 @@ Notes:
 
 ## Layout
 
-| Path           | Contents                                                                                                                                                      |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/domain/`  | Pure game logic: `types.ts`, `scoring.ts`, `draft.ts` (form input → hand), `reducer.ts` (all state changes), `stats.ts`, `seats.ts`, `rules.ts`. Unit-tested. |
-| `src/storage/` | `validate.ts` (validators), `schema.ts` (full-state validation), `persist.ts` (localStorage, migrations), `backup.ts` (export/import/merge). Unit-tested.     |
-| `src/ui/`      | `store.ts` (dispatch, undo, persistence), `router.ts` (hash routes), `screens/`, `components/`.                                                               |
-| `scripts/`     | `sw-plugin.ts` + `sw-template.js` (generates `dist/sw.js`), `generate-icons.mjs`.                                                                             |
-| `public/`      | `_headers` (CSP and other security headers, caching), manifest, icons.                                                                                        |
-| `tests/e2e/`   | Playwright specs and `helpers.ts`.                                                                                                                            |
+| Path           | Contents                                                                                                                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/domain/`  | Pure game logic: `types.ts`, `scoring.ts`, `draft.ts` (form input → hand), `reducer.ts` (all state changes), `stats.ts`, `seats.ts`, `rules.ts`. Unit-tested.                                 |
+| `src/storage/` | `validate.ts` (validators), `schema.ts` (full-state validation), `persist.ts` (localStorage, migrations), `backup.ts` (export/import/merge). Unit-tested.                                     |
+| `src/ui/`      | `store.ts` (dispatch, undo, persistence), `router.ts` (hash routes), `screens/` (`game/TableView.tsx` is the big-score table display), `components/`, hooks (`useMediaQuery`, `useWakeLock`). |
+| `scripts/`     | `sw-plugin.ts` + `sw-template.js` (generates `dist/sw.js`), `generate-icons.mjs`.                                                                                                             |
+| `public/`      | `_headers` (CSP and other security headers, caching), manifest, icons.                                                                                                                        |
+| `tests/e2e/`   | Playwright specs and `helpers.ts`.                                                                                                                                                            |
 
 ## Rules
 
