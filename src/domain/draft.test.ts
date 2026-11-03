@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftFromHand, emptyDraft, parseDraft, parseWhole } from './draft';
+import { draftBidSummary, draftFromHand, emptyDraft, parseDraft, parseWhole } from './draft';
 import { DEFAULT_RULES } from './rules';
 import type { HandDraft, Rules } from './types';
 
@@ -100,5 +100,32 @@ describe('parseDraft', () => {
       meld: ['6', '14'],
       defenderTricks: '8',
     });
+  });
+});
+
+describe('draftBidSummary', () => {
+  it('is null until there is a bidder and a bid', () => {
+    expect(draftBidSummary(draft({}))).toBeNull();
+    expect(draftBidSummary(draft({ bidder: 1 }))).toBeNull();
+    expect(draftBidSummary(draft({ bid: '30' }))).toBeNull();
+  });
+
+  it('knows the need only once the bidding team’s meld is entered', () => {
+    // Seat 1 is on team 1, so its meld is meld[1].
+    expect(draftBidSummary(draft({ bidder: 1, bid: '30' }))).toEqual({
+      bidder: 1,
+      bid: 30,
+      stuck: false,
+      thrownIn: false,
+      need: null,
+    });
+    expect(draftBidSummary(draft({ bidder: 1, bid: '30', meld: ['20', '12'] }))?.need).toBe(18);
+    expect(draftBidSummary(draft({ bidder: 1, bid: '30', meld: ['0', '35'] }))?.need).toBe(-5);
+  });
+
+  it('carries stuck and throw-in flags', () => {
+    expect(
+      draftBidSummary(draft({ bidder: 0, bid: '25', stuck: true, thrownIn: true })),
+    ).toMatchObject({ stuck: true, thrownIn: true });
   });
 });
