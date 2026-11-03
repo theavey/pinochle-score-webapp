@@ -28,6 +28,11 @@ Notes:
 - **e2e browsers:** locally you may only have Chromium; CI also runs WebKit (iPhone). If the
   installed Chromium build doesn't match the Playwright version, set `PW_CHROMIUM_PATH` to its
   executable instead of running `playwright install`.
+- **Service worker updates:** `scripts/sw-template.js` precaches the build. When a new version
+  activates over an old one, it reloads open windows (`client.navigate`), because installed iOS apps
+  are resumed rather than relaunched. `src/main.tsx` also calls `registration.update()` when the
+  app returns to the foreground. Keep `/sw.js` as `Cache-Control: no-store` in `public/_headers`.
+  `tests/e2e/update.spec.ts` simulates a deploy by rewriting `dist/sw.js`, so it runs alone, last.
 - **Watch for console errors:** e2e tests serve the real `public/_headers`, so a CSP violation shows
   up as a console error and fails the tests that check for them.
 

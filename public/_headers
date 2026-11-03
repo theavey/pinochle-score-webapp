@@ -19,7 +19,9 @@
   Cache-Control: no-cache
 /index.html
   Cache-Control: no-cache
+# Never store the service worker script, so every update check downloads it
+# in full and can't be fooled by a stale validator (ETag) into missing a deploy.
 /sw.js
-  Cache-Control: no-cache
+  Cache-Control: no-store
 /manifest.webmanifest
   Cache-Control: no-cache

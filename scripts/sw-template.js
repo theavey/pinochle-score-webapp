@@ -13,16 +13,25 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys.filter((k) => k.startsWith('pinochle-') && k !== CACHE).map((k) => caches.delete(k)),
-        ),
-      )
-      .then(() => self.clients.claim()),
-  );
+  const activated = (async () => {
+    const old = (await caches.keys()).filter((k) => k.startsWith('pinochle-') && k !== CACHE);
+    await Promise.all(old.map((k) => caches.delete(k)));
+    await self.clients.claim();
+    return old.length > 0;
+  })();
+  event.waitUntil(activated);
+  // An older version was installed, so open windows are still running it.
+  // Reload them into this version now rather than on some later launch: iOS
+  // home-screen apps are usually resumed, not relaunched, so "next launch" can
+  // be days away. All app state is saved on every change, so a reload loses
+  // nothing. (First install: nothing to reload.)
+  // Deliberately not part of waitUntil: the reload's own requests wait for
+  // activation to finish, so awaiting it inside activation would deadlock.
+  void activated.then(async (updated) => {
+    if (!updated) return;
+    const windows = await self.clients.matchAll({ type: 'window' });
+    for (const client of windows) client.navigate(client.url).catch(() => undefined);
+  });
 });
 
 self.addEventListener('fetch', (event) => {

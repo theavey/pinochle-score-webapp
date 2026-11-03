@@ -65,6 +65,11 @@ The scoring code is in [`src/domain/scoring.ts`](src/domain/scoring.ts), and the
    apps are exempt. It also gives you a full-screen app that works offline.
 3. Use **Settings → Export backup** now and then.
 
+**Updates** install themselves. The app checks for a new version whenever you open it or switch
+back to it while online, and reloads into the new version once it has downloaded (your game,
+including a half-entered hand, is kept). **Settings → About** shows the version and commit
+that is running.
+
 Data lives in that one browser on that one device. The home-screen app and the Safari tab keep
 _separate_ copies, and so do two different phones. Use export/import to move data between them.
 

@@ -25,8 +25,22 @@ void requestPersistence();
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js', { scope: './' }).catch((err: unknown) => {
-      console.warn('Service worker registration failed', err);
-    });
+    navigator.serviceWorker
+      .register('./sw.js', { scope: './' })
+      .then((registration) => {
+        // Browsers only look for a new version when the app is (re)loaded,
+        // but an installed app is usually just resumed. Check again whenever
+        // it comes back to the foreground (at most once a minute). The new
+        // service worker reloads the page itself once it takes over.
+        let lastCheck = Date.now();
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 60_000) return;
+          lastCheck = Date.now();
+          registration.update().catch(() => undefined);
+        });
+      })
+      .catch((err: unknown) => {
+        console.warn('Service worker registration failed', err);
+      });
   });
 }
