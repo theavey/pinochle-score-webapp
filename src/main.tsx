@@ -24,6 +24,22 @@ if (root) render(<App />, root);
 void requestPersistence();
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  // When a newly deployed version takes over this page, reload into it. (The
+  // service worker also asks open windows to reload; this covers browsers
+  // where that isn't supported.) The first takeover on a fresh install just
+  // means offline support is ready, so only later ones reload.
+  let controlled = navigator.serviceWorker.controller !== null;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!controlled) {
+      controlled = true;
+      return;
+    }
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
+
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('./sw.js', { scope: './' })

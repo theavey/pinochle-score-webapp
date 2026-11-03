@@ -21,7 +21,9 @@ test('an open app reloads itself into a newly deployed version', async ({ page }
       .toBe(true);
 
     // Mark this page instance; a reload clears the marker.
-    const marker = () => page.evaluate(() => (window as { marker?: number }).marker);
+    // While the page is reloading, evaluate() fails; treat that as "not yet".
+    const marker = () =>
+      page.evaluate(() => (window as { marker?: number }).marker).catch(() => 'reloading');
     await page.evaluate(() => {
       (window as { marker?: number }).marker = 1;
     });
@@ -41,7 +43,26 @@ test('an open app reloads itself into a newly deployed version', async ({ page }
       await (await navigator.serviceWorker.getRegistration())?.update();
     });
 
-    await expect.poll(marker, { timeout: 15_000 }).toBeUndefined();
+    try {
+      await expect.poll(marker, { timeout: 15_000 }).toBeUndefined();
+    } catch (err) {
+      // Say how far the update got, so a failure here explains itself.
+      const state = await page.evaluate(async () => {
+        const reg = await navigator.serviceWorker.getRegistration();
+        return {
+          caches: await caches.keys(),
+          installing: reg?.installing?.state ?? null,
+          waiting: reg?.waiting?.state ?? null,
+          active: reg?.active?.state ?? null,
+          served: /VERSION = "([^"]+)"/.exec(
+            await (await fetch('/sw.js', { cache: 'no-store' })).text(),
+          )?.[1],
+        };
+      });
+      throw new Error(`Page did not reload into the new version: ${JSON.stringify(state)}`, {
+        cause: err,
+      });
+    }
     await expect(page).toHaveURL(/#\/settings$/);
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     const keys = await page.evaluate(() => caches.keys());
