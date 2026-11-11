@@ -1,10 +1,13 @@
-// Cloudflare Workers config: a static-assets-only Worker (no server code).
+// Cloudflare Workers config: the static app plus a small sync API.
 // Docs: https://developers.cloudflare.com/workers/static-assets/
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   // Must match the Worker's name in the Cloudflare dashboard.
   "name": "pinochle-score-webapp",
   "compatibility_date": "2026-10-01",
+  // Only /api/* runs Worker code (encrypted device sync); everything else is
+  // served straight from the static assets, with public/_headers applied.
+  "main": "src/worker/index.ts",
   // `wrangler deploy`, `wrangler versions upload` and `wrangler dev` build the
   // site first, so Cloudflare's Git builds work even with no build command set.
   "build": {
@@ -15,7 +18,19 @@
     "directory": "./dist",
     // The app uses #/ hash routes, so unknown paths can simply 404.
     "not_found_handling": "none",
+    "run_worker_first": ["/api/*"],
   },
+  // One Durable Object per sync group: stores that group's encrypted data and
+  // tells connected devices when it changes.
+  "durable_objects": {
+    "bindings": [{ "name": "SYNC_GROUPS", "class_name": "SyncGroup" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncGroup"] }],
+  // Per-IP request limit for the sync API (approximate, per Cloudflare location).
+  // Generous: several devices at one table share an IP and sync often.
+  "ratelimits": [
+    { "name": "SYNC_RATE_LIMIT", "namespace_id": "4201", "simple": { "limit": 600, "period": 60 } },
+  ],
   // Custom domain: add "pinochle.theavey.com" in the Cloudflare dashboard
   // (Workers & Pages → pinochle-score-webapp → Settings → Domains & Routes),
   // or uncomment once the theavey.com zone is on this account:

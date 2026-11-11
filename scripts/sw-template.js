@@ -39,6 +39,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // The sync API must always reach the network (never cached).
+  if (url.pathname.startsWith('/api/')) return;
 
   if (req.mode === 'navigate') {
     // App shell: serve the cached page instantly (works offline at the table).

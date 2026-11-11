@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["./**/*.ts", "../sync/protocol.ts", "../../worker-configuration.d.ts"],
+  "exclude": []
+}

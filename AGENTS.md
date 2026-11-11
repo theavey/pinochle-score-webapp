@@ -4,11 +4,12 @@ Guidance for coding agents (and humans) working in this repo. `CLAUDE.md` import
 
 ## What this is
 
-A phone-first scorekeeper for 4-player partnership pinochle. It is a static single-page app:
-Vite + TypeScript (strict) + Preact, deployed as a static-assets-only Cloudflare Worker at
-`pinochle.theavey.com`. There is no backend. All data lives in the browser's `localStorage`, and
-the app works offline through a small service worker. See `README.md` for features, scoring rules
-and deployment.
+A phone-first scorekeeper for 4-player partnership pinochle. It is a local-first single-page app:
+Vite + TypeScript (strict) + Preact, deployed as a Cloudflare Worker at `pinochle.theavey.com`.
+Data lives in the browser's `localStorage` and the app works offline through a small service
+worker. The only server code is an optional, end-to-end encrypted sync API (`src/worker/`) that
+stores one encrypted blob per sync group in a Durable Object. See `README.md` for features,
+scoring rules, security and deployment.
 
 ## Setup and commands
 
@@ -39,14 +40,16 @@ Notes:
 
 ## Layout
 
-| Path           | Contents                                                                                                                                                                                                   |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/domain/`  | Pure game logic: `types.ts`, `scoring.ts`, `draft.ts` (form input → hand), `reducer.ts` (all state changes), `merge.ts` (merging two copies of the data), `stats.ts`, `seats.ts`, `rules.ts`. Unit-tested. |
-| `src/storage/` | `validate.ts` (validators), `schema.ts` (full-state validation), `persist.ts` (localStorage, migrations), `backup.ts` (export/import/merge). Unit-tested.                                                  |
-| `src/ui/`      | `store.ts` (dispatch, undo, persistence), `router.ts` (hash routes), `screens/` (`game/TableView.tsx` is the big-score table display), `components/`, hooks (`useMediaQuery`, `useWakeLock`).              |
-| `scripts/`     | `sw-plugin.ts` + `sw-template.js` (generates `dist/sw.js`), `generate-icons.mjs`.                                                                                                                          |
-| `public/`      | `_headers` (CSP and other security headers, caching), manifest, icons.                                                                                                                                     |
-| `tests/e2e/`   | Playwright specs and `helpers.ts`.                                                                                                                                                                         |
+| Path           | Contents                                                                                                                                                                                                                                       |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/domain/`  | Pure game logic: `types.ts`, `scoring.ts`, `draft.ts` (form input → hand), `reducer.ts` (all state changes), `merge.ts` (merging two copies of the data), `stats.ts`, `seats.ts`, `rules.ts`. Unit-tested.                                     |
+| `src/storage/` | `validate.ts` (validators), `schema.ts` (full-state validation), `persist.ts` (localStorage, migrations), `backup.ts` (export/import/merge). Unit-tested.                                                                                      |
+| `src/ui/`      | `store.ts` (dispatch, undo, persistence), `router.ts` (hash routes), `screens/` (`game/TableView.tsx` is the big-score table display), `components/`, hooks (`useMediaQuery`, `useWakeLock`).                                                  |
+| `src/sync/`    | `crypto.ts` (sync codes, HKDF keys, gzip + AES-GCM), `engine.ts` (pull, merge, push, live socket), `protocol.ts` (API contract shared with the Worker).                                                                                        |
+| `src/worker/`  | Cloudflare Worker for `/api/sync/*`: `index.ts` (routing, origin check, rate limit) and `syncGroup.ts` (Durable Object: one encrypted blob per group, versioned writes, WebSocket notices). Own `tsconfig.json` with Cloudflare runtime types. |
+| `scripts/`     | `sw-plugin.ts` + `sw-template.js` (generates `dist/sw.js`), `generate-icons.mjs`.                                                                                                                                                              |
+| `public/`      | `_headers` (CSP and other security headers, caching), manifest, icons.                                                                                                                                                                         |
+| `tests/e2e/`   | Playwright specs and `helpers.ts`.                                                                                                                                                                                                             |
 
 ## Rules
 
@@ -78,6 +81,17 @@ give the same games, players and tombstones, so devices converge.
   and a player's on rename.
 - `merge.test.ts` checks the merge is order-independent; keep those checks when changing it.
 
+**Sync**
+
+- The server must never see plaintext: everything uploaded goes through `encrypt()` in
+  `src/sync/crypto.ts`, and `tests/e2e/sync.spec.ts` checks uploads contain no player names.
+- Data downloaded from the server is untrusted: decrypt, then `migrate()` and `validateAppState`,
+  then `mergeStates`.
+- After changing `wrangler.jsonc` (bindings, Durable Objects), run `npm run types:worker` to
+  regenerate `worker-configuration.d.ts`. A Durable Object schema change needs a new entry in
+  `migrations`.
+- Worker responses don't get `public/_headers`; set headers in `src/worker/http.ts`.
+
 **Security**
 
 - No raw HTML (`dangerouslySetInnerHTML`, `innerHTML`, `insertAdjacentHTML`). ESLint enforces this.
@@ -97,7 +111,7 @@ give the same games, players and tombstones, so devices converge.
 
 ## Dependencies
 
-- **Runtime:** don't add runtime dependencies without a strong reason. The shipped JS is about 21 KB
+- **Runtime:** don't add runtime dependencies without a strong reason. The shipped JS is about 27 KB
   gzipped, with Preact as the only runtime dependency.
 - **Cooldown:** when adding or upgrading a package, use
   `npm install --min-release-age=7 <pkg>` so you only take releases at least 7 days old.
@@ -114,7 +128,8 @@ give the same games, players and tombstones, so devices converge.
 
 - **Deploys:** Cloudflare Workers Builds deploys `main` and uploads preview versions for other
   branches (`npx wrangler preview`, which needs the `previews` block in `wrangler.jsonc`).
-  `wrangler.jsonc` runs `npm run build` itself (`build.command`). The Worker `name` must
+  `wrangler.jsonc` runs `npm run build` itself (`build.command`). Only `/api/*` runs Worker code
+  (`run_worker_first`); `wrangler dev` runs it locally, Durable Object included. The Worker `name` must
   match the dashboard (`pinochle-score-webapp`). Node comes from `.nvmrc`, npm from `packageManager`.
 - **Branches and commits:** work on a branch and open a PR into `main`. CI (lint, typecheck, unit,
   build, prod audit, e2e in Chromium and WebKit) must be green before merging. Pushing to `main`

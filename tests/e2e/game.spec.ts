@@ -91,6 +91,18 @@ test('ends a game early with the leader winning', async ({ page }) => {
   await expect(page.getByText(/Ann & Cy win \(called\)/)).toBeVisible();
 });
 
+test('deletes a game from the game menu', async ({ page }) => {
+  const errors = watchConsole(page);
+  await startGame(page);
+  await page.getByRole('button', { name: 'Game menu' }).click();
+  await page.getByRole('button', { name: 'Delete game' }).click();
+  await page.getByRole('button', { name: 'Delete game' }).last().click();
+  await expect(page.getByRole('link', { name: 'New game' })).toBeVisible();
+  await page.goto('/#/history');
+  await expect(page.getByText('No games yet.')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('shows field errors instead of saving a bad hand', async ({ page }) => {
   await startGame(page);
   await saveHand(page);
