@@ -62,7 +62,13 @@ export type Action =
   | { type: 'deleteGame'; gameId: GameId; now: number }
   | { type: 'setDefaultRules'; rules: Rules }
   | { type: 'setSettings'; settings: Partial<Settings> }
-  | { type: 'replaceState'; state: AppState };
+  | { type: 'replaceState'; state: AppState }
+  /**
+   * Undo: go back to an earlier snapshot, recorded as a new change (restored
+   * items get `now`, items that disappear get tombstones) so that merging
+   * with another device's newer copy doesn't undo the undo.
+   */
+  | { type: 'restore'; state: AppState; now: number };
 
 export class ActionError extends Error {}
 
@@ -83,6 +89,36 @@ function playerInUse(state: AppState, id: PlayerId): boolean {
 
 function replaceId(quad: SeatQuad<PlayerId>, from: PlayerId, into: PlayerId): SeatQuad<PlayerId> {
   return quad.map((p) => (p === from ? into : p)) as SeatQuad<PlayerId>;
+}
+
+function restoreSnapshot(current: AppState, prev: AppState, now: number): AppState {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const curGames = new Map(current.games.map((g) => [g.id, g]));
+  const curPlayers = new Map(current.players.map((p) => [p.id, p]));
+  const prevGameIds = new Set(prev.games.map((g) => g.id));
+  const prevPlayerIds = new Set(prev.players.map((p) => p.id));
+
+  const games = prev.games.map((g) => (same(g, curGames.get(g.id)) ? g : { ...g, updatedAt: now }));
+  const players = prev.players.map((p) =>
+    same(p, curPlayers.get(p.id)) ? p : { ...p, updatedAt: now },
+  );
+  return {
+    ...prev,
+    games,
+    players,
+    tombstones: {
+      games: [
+        ...prev.tombstones.games.filter((t) => !prevGameIds.has(t.id)),
+        ...current.games.filter((g) => !prevGameIds.has(g.id)).map((g) => ({ id: g.id, at: now })),
+      ],
+      players: [
+        ...prev.tombstones.players.filter((t) => !prevPlayerIds.has(t.id)),
+        ...current.players
+          .filter((p) => !prevPlayerIds.has(p.id))
+          .map((p) => ({ id: p.id, at: now, mergedInto: null })),
+      ],
+    },
+  };
 }
 
 /**
@@ -251,5 +287,7 @@ export function reduce(state: AppState, action: Action): AppState {
       return { ...state, settings: { ...state.settings, ...action.settings } };
     case 'replaceState':
       return action.state;
+    case 'restore':
+      return restoreSnapshot(state, action.state, action.now);
   }
 }

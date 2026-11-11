@@ -101,8 +101,6 @@ describe('mergeStates', () => {
   });
 
   it('does not bring a deleted game back from a stale copy', () => {
-    const deleted = apply(base(), { type: 'deleteGame', gameId: 'g1', now: 5 });
-    // The other device even edited it after... the deletion still wins.
     const edited = apply(base(), {
       type: 'saveHand',
       gameId: 'g1',
@@ -110,9 +108,56 @@ describe('mergeStates', () => {
       hand: hand(30),
       now: 9,
     });
+    const deleted = apply(edited, { type: 'deleteGame', gameId: 'g1', now: 12 });
     expect(mergeStates(deleted, edited).games).toEqual([]);
     expect(mergeStates(edited, deleted).games).toEqual([]);
-    expect(mergeStates(edited, deleted).tombstones.games).toEqual([{ id: 'g1', at: 5 }]);
+    expect(mergeStates(edited, deleted).tombstones.games).toEqual([{ id: 'g1', at: 12 }]);
+  });
+
+  it('lets a later change win over an earlier delete (e.g. Undo)', () => {
+    const deleted = apply(base(), { type: 'deleteGame', gameId: 'g1', now: 5 });
+    const editedLater = apply(base(), {
+      type: 'saveHand',
+      gameId: 'g1',
+      handId: 'h1',
+      hand: hand(30),
+      now: 9,
+    });
+    for (const m of [mergeStates(deleted, editedLater), mergeStates(editedLater, deleted)]) {
+      expect(m.games.map((g) => g.id)).toEqual(['g1']);
+      expect(m.tombstones.games).toEqual([]);
+    }
+  });
+
+  it('keeps an undo after the undone change has synced', () => {
+    const before = base();
+    const saved = apply(before, {
+      type: 'saveHand',
+      gameId: 'g1',
+      handId: 'h1',
+      hand: hand(30),
+      now: 10,
+    });
+    // The other device already has the saved hand; this device then undoes it.
+    const undone = reduce(saved, { type: 'restore', state: before, now: 20 });
+    for (const m of [mergeStates(undone, saved), mergeStates(saved, undone)]) {
+      expect(m.games[0]?.hands).toEqual([]);
+    }
+    // Undoing a delete brings the game back everywhere, too.
+    const deleted = apply(saved, { type: 'deleteGame', gameId: 'g1', now: 30 });
+    const restored = reduce(deleted, { type: 'restore', state: saved, now: 40 });
+    expect(mergeStates(deleted, restored).games.map((g) => g.id)).toEqual(['g1']);
+    // And undoing a game's creation deletes it everywhere.
+    const created = apply(before, {
+      type: 'createGame',
+      id: 'g2',
+      seats: ['a', 'b', 'c', 'd'],
+      firstDealer: 0,
+      rules: DEFAULT_RULES,
+      now: 50,
+    });
+    const uncreated = reduce(created, { type: 'restore', state: before, now: 60 });
+    expect(mergeStates(created, uncreated).games.map((g) => g.id)).toEqual(['g1']);
   });
 
   it('takes the newest rename', () => {

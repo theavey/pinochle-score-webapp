@@ -20,7 +20,9 @@ export const MAX_TOMBSTONES = 5_000;
  * into B gives the same players, games and tombstones as merging B into A, so
  * devices that keep merging each other's data converge. Rules:
  * - Deletions are remembered (tombstones), so a stale copy can't resurrect a
- *   deleted game or a merged-away player.
+ *   deleted game or a merged-away player. The newest change wins: a deletion
+ *   beats any edit made before it, and an edit made after it (e.g. Undo of
+ *   the delete) brings the item back and drops the deletion record.
  * - Games: the copy with the newest `updatedAt` wins.
  * - Players: the newest rename wins. Two players with the same name are the
  *   same person (the app's identity rule); they're merged into the smaller id
@@ -28,8 +30,7 @@ export const MAX_TOMBSTONES = 5_000;
  * - Defaults and settings are per device: kept from `local`.
  */
 export function mergeStates(local: AppState, remote: AppState): AppState {
-  const tombstones = mergeTombstones(local.tombstones, remote.tombstones);
-  const deletedGames = new Set(tombstones.games.map((t) => t.id));
+  const allTombstones = mergeTombstones(local.tombstones, remote.tombstones);
 
   // Player records: newest rename wins.
   const records = new Map<PlayerId, Player>();
@@ -38,12 +39,25 @@ export function mergeStates(local: AppState, remote: AppState): AppState {
     records.set(p.id, seen ? newerPlayer(seen, p) : p);
   }
 
-  // Games: newest copy wins; deleted games stay deleted.
+  // Games: newest copy wins.
   const gamesById = new Map<string, Game>();
   for (const g of [...local.games, ...remote.games]) {
-    if (deletedGames.has(g.id)) continue;
     const seen = gamesById.get(g.id);
     gamesById.set(g.id, seen ? newerGame(seen, g) : g);
+  }
+
+  // A deletion holds unless the item was changed after it.
+  const tombstones: Tombstones = { games: [], players: [] };
+  for (const t of allTombstones.games) {
+    const g = gamesById.get(t.id);
+    if (g && g.updatedAt > t.at) continue; // edited (or restored) after the delete
+    gamesById.delete(t.id);
+    tombstones.games.push(t);
+  }
+  for (const t of allTombstones.players) {
+    const p = records.get(t.id);
+    if (p && p.updatedAt > t.at) continue; // renamed (or restored) after removal
+    tombstones.players.push(t);
   }
   const games = [...gamesById.values()];
 
