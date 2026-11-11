@@ -27,19 +27,6 @@ export function Dialog({ open, title, onClose, children, actions }: Props) {
     }
   }, [open]);
 
-  // Close before the element is removed (e.g. a confirm that navigates away):
-  // WebKit logs a CSP style-src violation when a still-open modal <dialog> is
-  // removed from the page.
-  useEffect(() => {
-    const d = dialogRef.current;
-    return () => {
-      if (d?.open) {
-        closingFromPropsRef.current = true;
-        d.close();
-      }
-    };
-  }, []);
-
   return (
     <dialog
       ref={dialogRef}

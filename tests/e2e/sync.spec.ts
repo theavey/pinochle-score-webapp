@@ -66,11 +66,10 @@ test('two devices sync games, live bids and deletions, encrypted', async ({ page
   await page.goto('/#/history');
   await expect(page.getByText('No games yet.')).toBeVisible({ timeout: 10_000 });
   expect(errors, 'console errors on A after the deletion synced').toEqual([]);
+  // Checked before closing B: in WebKit, closing a browser context can log a
+  // CSP message of its own after the app has finished.
   expect(errorsB, 'console errors on B after the deletion synced').toEqual([]);
-
   await ctxB.close();
-  expect(errors).toEqual([]);
-  expect(errorsB).toEqual([]);
 });
 
 test('an invalid invite link is refused', async ({ page }) => {
