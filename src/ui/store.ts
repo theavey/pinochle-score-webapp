@@ -28,6 +28,29 @@ const listeners = new Set<() => void>();
 let toastSeq = 0;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
+/** Where a state change came from: this device's user, or a merge from sync. */
+export type ChangeSource = 'local' | 'sync';
+const stateListeners = new Set<(state: AppState, source: ChangeSource) => void>();
+
+/** Listen for data changes (not UI-only changes like toasts). Returns an unsubscribe function. */
+export function onStateChange(fn: (state: AppState, source: ChangeSource) => void): () => void {
+  stateListeners.add(fn);
+  return () => {
+    stateListeners.delete(fn);
+  };
+}
+
+function commit(next: AppState, source: ChangeSource) {
+  emit({ state: next });
+  persist(next);
+  for (const l of stateListeners) l(next, source);
+}
+
+/** Apply data merged in from another device: saved, but not undoable and not re-announced as local. */
+export function applySyncedState(next: AppState) {
+  commit(next, 'sync');
+}
+
 function emit(next: Partial<StoreSnapshot>) {
   snapshot = { ...snapshot, ...next };
   for (const l of listeners) l();
@@ -75,8 +98,7 @@ export function dispatch(action: Action, undoMessage?: string): boolean {
     undoStack.push(snapshot.state);
     if (undoStack.length > MAX_UNDO) undoStack.shift();
   }
-  emit({ state: next });
-  persist(next);
+  commit(next, 'local');
   if (undoMessage) showToast(undoMessage, 'info', true);
   return true;
 }
@@ -86,8 +108,7 @@ export function undo() {
   if (!prev) return;
   // Recorded as a new change, so a synced copy doesn't bring the undone change back.
   const next = reduce(snapshot.state, { type: 'restore', state: prev, now: Date.now() });
-  emit({ state: next });
-  persist(next);
+  commit(next, 'local');
   showToast('Undone');
 }
 

@@ -1,6 +1,7 @@
 import { render } from 'preact';
 import { scoreGame } from './domain/scoring';
 import { requestPersistence } from './storage/persist';
+import { initSync } from './sync/engine';
 import { App } from './ui/App';
 import { navigate } from './ui/router';
 import { getState } from './ui/store';
@@ -17,6 +18,7 @@ function resumeRecentGame() {
 }
 
 resumeRecentGame();
+initSync();
 
 const root = document.getElementById('app');
 if (root) render(<App />, root);

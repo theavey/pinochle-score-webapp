@@ -4,10 +4,19 @@ import type { AppState, Player, Rules } from '../../domain/types';
 import { backupFileName, exportBackup, mergeBackup, parseBackup } from '../../storage/backup';
 import { requestPersistence } from '../../storage/persist';
 import { Choice } from '../components/Choice';
-import { Dialog } from '../components/Dialog';
+import { ConfirmDialog, Dialog } from '../components/Dialog';
 import { RulesEditor } from '../components/RulesEditor';
 import { href } from '../router';
-import { dispatch, getState, useStore } from '../store';
+import {
+  getSyncCode,
+  inviteLink,
+  joinGroup,
+  resetGroup,
+  startNewGroup,
+  stopSync,
+  useSyncStatus,
+} from '../../sync/engine';
+import { dispatch, getState, showToast, useStore } from '../store';
 
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -154,6 +163,184 @@ function PlayersSection() {
           </>
         )}
       </Dialog>
+    </section>
+  );
+}
+
+function SyncSection() {
+  const status = useSyncStatus();
+  const syncCode = getSyncCode();
+  const [joining, setJoining] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [showCode, setShowCode] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const share = async (c: string) => {
+    const url = inviteLink(c);
+    if ('share' in navigator) {
+      try {
+        await navigator.share({ title: 'Join my pinochle scores', url });
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Invite link copied');
+    } catch {
+      setShowCode(true);
+    }
+  };
+
+  const statusText =
+    status.state === 'synced'
+      ? 'Synced'
+      : status.state === 'syncing'
+        ? 'Syncing…'
+        : status.state === 'offline'
+          ? 'Offline: changes are saved here and will sync when you’re back online'
+          : status.state === 'error'
+            ? status.message
+            : 'Off';
+
+  return (
+    <section class="card" aria-labelledby="sync-title">
+      <h2 id="sync-title">Sync between devices</h2>
+      {syncCode === null ? (
+        <>
+          <p class="muted small">
+            Keep games in step across your phone, iPad and other devices (they can show the live
+            score, too). Data is encrypted on each device before it’s sent, so the server can’t read
+            it.
+          </p>
+          <div class="row wrap">
+            <button
+              type="button"
+              class="btn btn-primary"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void startNewGroup()
+                  .then((c) => share(c))
+                  .finally(() => {
+                    setBusy(false);
+                  });
+              }}
+            >
+              Start syncing
+            </button>
+            <button
+              type="button"
+              class="btn"
+              aria-expanded={joining}
+              onClick={() => {
+                setJoining(!joining);
+              }}
+            >
+              Join with a code
+            </button>
+          </div>
+          {joining && (
+            <form
+              class="row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setBusy(true);
+                void joinGroup(typed)
+                  .then((ok) => {
+                    if (ok) {
+                      setTyped('');
+                      setJoining(false);
+                    } else showToast('That code isn’t valid. Check it and try again.', 'error');
+                  })
+                  .finally(() => {
+                    setBusy(false);
+                  });
+              }}
+            >
+              <input
+                class="grow"
+                type="text"
+                aria-label="Sync code"
+                placeholder="XXXX-XXXX-…"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellcheck={false}
+                value={typed}
+                onInput={(e) => {
+                  setTyped(e.currentTarget.value);
+                }}
+              />
+              <button type="submit" class="btn btn-primary" disabled={busy || !typed.trim()}>
+                Join
+              </button>
+            </form>
+          )}
+        </>
+      ) : (
+        <>
+          <p class={status.state === 'error' ? 'field-error' : 'small'} role="status">
+            {statusText}
+          </p>
+          <div class="row wrap">
+            <button type="button" class="btn btn-primary" onClick={() => void share(syncCode)}>
+              Share invite link
+            </button>
+            <button
+              type="button"
+              class="btn"
+              onClick={() => {
+                setShowCode(!showCode);
+              }}
+            >
+              {showCode ? 'Hide code' : 'Show code'}
+            </button>
+          </div>
+          {showCode && (
+            <p class="sync-code" aria-label="Sync code">
+              {syncCode}
+            </p>
+          )}
+          <p class="muted tiny">
+            Treat the link and code like a password: anyone with them can see and change these
+            games.
+          </p>
+          <div class="row wrap">
+            <button type="button" class="btn btn-small" onClick={stopSync}>
+              Stop syncing on this device
+            </button>
+            <button
+              type="button"
+              class="btn btn-small btn-danger-outline"
+              onClick={() => {
+                setConfirmReset(true);
+              }}
+            >
+              Reset sync code…
+            </button>
+          </div>
+          <ConfirmDialog
+            open={confirmReset}
+            title="Reset the sync code?"
+            message="The group's copy on the server is erased and a new code is made from this device's games. Every other device stops syncing until it joins again with the new invite link. Use this if a device with the old code was lost."
+            confirmLabel="Reset code"
+            danger
+            onCancel={() => {
+              setConfirmReset(false);
+            }}
+            onConfirm={() => {
+              setConfirmReset(false);
+              void resetGroup()
+                .then((c) => share(c))
+                .catch(() => {
+                  showToast('Could not reset right now. Try again when online.', 'error');
+                });
+            }}
+          />
+        </>
+      )}
     </section>
   );
 }
@@ -344,6 +531,7 @@ export function Settings() {
       </section>
 
       <PlayersSection />
+      <SyncSection />
       <BackupSection />
       <StorageSection />
 

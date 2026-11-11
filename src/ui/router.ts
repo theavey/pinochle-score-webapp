@@ -6,12 +6,16 @@ export type Route =
   | { name: 'game'; id: string }
   | { name: 'history' }
   | { name: 'stats' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  /** Invite link: #/join/<sync code>. The fragment never reaches any server. */
+  | { name: 'join'; code: string };
 
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#/, '') || '/';
   const game = /^\/game\/([A-Za-z0-9-]{1,64})$/.exec(path);
   if (game?.[1]) return { name: 'game', id: game[1] };
+  const join = /^\/join\/([0-9A-Za-z-]{20,64})$/.exec(path);
+  if (join?.[1]) return { name: 'join', code: join[1] };
   switch (path) {
     case '/new':
       return { name: 'new' };
@@ -32,6 +36,8 @@ export function href(route: Route): string {
       return '#/';
     case 'game':
       return `#/game/${route.id}`;
+    case 'join':
+      return `#/join/${route.code}`;
     default:
       return `#/${route.name}`;
   }

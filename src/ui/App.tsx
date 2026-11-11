@@ -2,6 +2,7 @@ import { useRoute } from './router';
 import { GameScreen } from './screens/game/GameScreen';
 import { History } from './screens/History';
 import { Home } from './screens/Home';
+import { JoinSync } from './screens/JoinSync';
 import { NewGame } from './screens/NewGame';
 import { Settings } from './screens/Settings';
 import { Stats } from './screens/Stats';
@@ -22,6 +23,8 @@ function Screen() {
       return <Stats />;
     case 'settings':
       return <Settings />;
+    case 'join':
+      return <JoinSync code={route.code} />;
   }
 }
 
