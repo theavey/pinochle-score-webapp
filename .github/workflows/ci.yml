@@ -15,7 +15,14 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Playwright's image has Chromium, WebKit and their system libraries
+    # preinstalled, so CI doesn't depend on the Ubuntu apt mirrors (they've
+    # had outages that hung `playwright install --with-deps`). Keep the tag
+    # near the @playwright/test version in package-lock.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --user 1001
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,8 +38,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # A no-op when the image matches @playwright/test. After a Playwright
+      # bump it downloads the new browser builds (from Playwright's CDN, not
+      # apt), so a stale image tag only costs time.
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium webkit
+        run: npx playwright install chromium webkit
       - name: End-to-end tests (Chromium phone/tablet + WebKit iPhone)
         run: npm run test:e2e
         env:

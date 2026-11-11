@@ -27,7 +27,8 @@ Notes:
 
 - **e2e browsers:** locally you may only have Chromium; CI also runs WebKit (iPhone). If the
   installed Chromium build doesn't match the Playwright version, set `PW_CHROMIUM_PATH` to its
-  executable instead of running `playwright install`.
+  executable instead of running `playwright install`. CI runs in Playwright's container image
+  (`ci.yml`), so it needs no apt packages; when bumping `@playwright/test`, bump the image tag too.
 - **Service worker updates:** `scripts/sw-template.js` precaches the build. When a new version
   activates over an old one, it reloads open windows (`client.navigate`), because installed iOS apps
   are resumed rather than relaunched. `src/main.tsx` also calls `registration.update()` when the
