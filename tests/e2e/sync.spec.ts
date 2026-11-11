@@ -58,10 +58,15 @@ test('two devices sync games, live bids and deletions, encrypted', async ({ page
   // Deleting the game on B removes it on A.
   await b.getByRole('button', { name: 'Scoresheet' }).click();
   await b.getByRole('button', { name: 'Game menu' }).click();
+  expect(errorsB, 'console errors on B with the game menu open').toEqual([]);
   await b.getByRole('button', { name: 'Delete game' }).click();
   await b.getByRole('button', { name: 'Delete game' }).last().click();
+  await expect(b.getByRole('link', { name: 'New game' })).toBeVisible();
+  expect(errorsB, 'console errors on B after deleting').toEqual([]);
   await page.goto('/#/history');
   await expect(page.getByText('No games yet.')).toBeVisible({ timeout: 10_000 });
+  expect(errors, 'console errors on A after the deletion synced').toEqual([]);
+  expect(errorsB, 'console errors on B after the deletion synced').toEqual([]);
 
   await ctxB.close();
   expect(errors).toEqual([]);
