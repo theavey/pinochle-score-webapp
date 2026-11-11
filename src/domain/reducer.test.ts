@@ -60,33 +60,35 @@ describe('players', () => {
 
   it('renames, but not onto another player', () => {
     const s = withPlayers('Ann', 'Bob');
-    expect(reduce(s, { type: 'renamePlayer', id: 'p0', name: 'Annie' }).players[0]?.name).toBe(
-      'Annie',
-    );
-    expect(() => reduce(s, { type: 'renamePlayer', id: 'p0', name: 'BOB' })).toThrow();
+    expect(
+      reduce(s, { type: 'renamePlayer', id: 'p0', name: 'Annie', now: 50 }).players[0]?.name,
+    ).toBe('Annie');
+    expect(() => reduce(s, { type: 'renamePlayer', id: 'p0', name: 'BOB', now: 50 })).toThrow();
     // Changing only the case of your own name is fine.
-    expect(reduce(s, { type: 'renamePlayer', id: 'p0', name: 'ANN' }).players[0]?.name).toBe('ANN');
+    expect(
+      reduce(s, { type: 'renamePlayer', id: 'p0', name: 'ANN', now: 50 }).players[0]?.name,
+    ).toBe('ANN');
   });
 
   it('only deletes players who are not in any game', () => {
     const s = withGame();
-    expect(() => reduce(s, { type: 'deletePlayer', id: 'p0' })).toThrow(/Merge/);
-    expect(reduce(s, { type: 'deletePlayer', id: 'p4' }).players).toHaveLength(4);
+    expect(() => reduce(s, { type: 'deletePlayer', id: 'p0', now: 50 })).toThrow(/Merge/);
+    expect(reduce(s, { type: 'deletePlayer', id: 'p4', now: 50 }).players).toHaveLength(4);
   });
 
   it('merges a duplicate player into another everywhere', () => {
     let s = withGame();
     s = reduce(s, { type: 'saveHand', gameId: 'g1', handId: 'h1', hand, now: 11 });
-    s = reduce(s, { type: 'mergePlayers', from: 'p0', into: 'p4' });
+    s = reduce(s, { type: 'mergePlayers', from: 'p0', into: 'p4', now: 50 });
     expect(s.players.map((p) => p.id)).not.toContain('p0');
     expect(s.games[0]?.seats[0]).toBe('p4');
     expect(s.games[0]?.hands[0]?.players[0]).toBe('p4');
   });
 
   it('refuses to merge two people who played together', () => {
-    expect(() => reduce(withGame(), { type: 'mergePlayers', from: 'p0', into: 'p1' })).toThrow(
-      /same game/,
-    );
+    expect(() =>
+      reduce(withGame(), { type: 'mergePlayers', from: 'p0', into: 'p1', now: 50 }),
+    ).toThrow(/same game/);
   });
 });
 

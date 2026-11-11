@@ -49,6 +49,20 @@ function migrateV1toV2(state: Obj): Obj {
 }
 
 /**
+ * v2 -> v3: players get `updatedAt` (renames: newest wins when merging) and
+ * the state gets tombstones (deleted games and removed players), so merging
+ * with another device or a backup can't bring deleted things back.
+ */
+function migrateV2toV3(state: Obj): Obj {
+  const players = Array.isArray(state.players)
+    ? state.players.map((p: unknown) =>
+        isObj(p) && !('updatedAt' in p) ? { ...p, updatedAt: p.createdAt } : p,
+      )
+    : state.players;
+  return { ...state, players, tombstones: { games: [], players: [] }, schemaVersion: 3 };
+}
+
+/**
  * Bring older saved formats up to the current schema, one version at a
  * time. Anything unrecognized is passed through for validation to reject.
  */
@@ -56,6 +70,7 @@ export function migrate(raw: unknown): unknown {
   if (!isObj(raw)) return raw;
   let state = raw;
   if (state.schemaVersion === 1) state = migrateV1toV2(state);
+  if (state.schemaVersion === 2) state = migrateV2toV3(state);
   return state;
 }
 

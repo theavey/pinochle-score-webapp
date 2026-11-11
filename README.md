@@ -29,7 +29,9 @@ Planned home: **https://pinochle.theavey.com** (Cloudflare Workers, static asset
   - Per-player stats: win–loss, bids taken, % of bids made, average and highest bid.
   - Per-partnership win–loss records.
   - Stats follow _people_, not seats, so changing partners is fine.
-- **Backup:** export to a JSON file (the phone's share sheet lets you save it to Files or Drive, or email it). Import it on another device, merging with what's already there or replacing it.
+- **Backup:** export to a JSON file (the phone's share sheet lets you save it to Files or Drive, or email it). Import it on another device, merging with what's already there or replacing it. Merging keeps the
+  newest version of each game and player name, and remembers deletions, so a deleted game doesn't
+  come back from an older backup. Players with the same name are treated as the same person.
 - **At the table:** an optional keep-screen-awake setting, dark mode, large tap targets, and layouts sized for both phone and iPad.
 
 ## Scoring rules
@@ -120,8 +122,8 @@ There is one runtime dependency (Preact); everything else is build and test tool
 ### Project layout
 
 ```
-src/domain/    Pure game logic: types, scoring, draft parsing, reducer, stats (unit-tested)
-src/storage/   Runtime validation, localStorage persistence, backup import/export/merge
+src/domain/    Pure game logic: types, scoring, draft parsing, reducer, merge, stats (unit-tested)
+src/storage/   Runtime validation, localStorage persistence, backup import/export
 src/ui/        Preact UI: store (dispatch/undo/persist), hash router, screens, components
 public/        Icons, web manifest, Cloudflare _headers (security headers, caching)
 scripts/       Build-time service-worker generator, icon generator

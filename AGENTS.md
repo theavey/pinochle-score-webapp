@@ -38,14 +38,14 @@ Notes:
 
 ## Layout
 
-| Path           | Contents                                                                                                                                                                                      |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/domain/`  | Pure game logic: `types.ts`, `scoring.ts`, `draft.ts` (form input → hand), `reducer.ts` (all state changes), `stats.ts`, `seats.ts`, `rules.ts`. Unit-tested.                                 |
-| `src/storage/` | `validate.ts` (validators), `schema.ts` (full-state validation), `persist.ts` (localStorage, migrations), `backup.ts` (export/import/merge). Unit-tested.                                     |
-| `src/ui/`      | `store.ts` (dispatch, undo, persistence), `router.ts` (hash routes), `screens/` (`game/TableView.tsx` is the big-score table display), `components/`, hooks (`useMediaQuery`, `useWakeLock`). |
-| `scripts/`     | `sw-plugin.ts` + `sw-template.js` (generates `dist/sw.js`), `generate-icons.mjs`.                                                                                                             |
-| `public/`      | `_headers` (CSP and other security headers, caching), manifest, icons.                                                                                                                        |
-| `tests/e2e/`   | Playwright specs and `helpers.ts`.                                                                                                                                                            |
+| Path           | Contents                                                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/domain/`  | Pure game logic: `types.ts`, `scoring.ts`, `draft.ts` (form input → hand), `reducer.ts` (all state changes), `merge.ts` (merging two copies of the data), `stats.ts`, `seats.ts`, `rules.ts`. Unit-tested. |
+| `src/storage/` | `validate.ts` (validators), `schema.ts` (full-state validation), `persist.ts` (localStorage, migrations), `backup.ts` (export/import/merge). Unit-tested.                                                  |
+| `src/ui/`      | `store.ts` (dispatch, undo, persistence), `router.ts` (hash routes), `screens/` (`game/TableView.tsx` is the big-score table display), `components/`, hooks (`useMediaQuery`, `useWakeLock`).              |
+| `scripts/`     | `sw-plugin.ts` + `sw-template.js` (generates `dist/sw.js`), `generate-icons.mjs`.                                                                                                                          |
+| `public/`      | `_headers` (CSP and other security headers, caching), manifest, icons.                                                                                                                                     |
+| `tests/e2e/`   | Playwright specs and `helpers.ts`.                                                                                                                                                                         |
 
 ## Rules
 
@@ -67,6 +67,15 @@ Notes:
 - test that old saved data still loads.
 
 Never write code that could overwrite data the app failed to read.
+
+**Merging:** `mergeStates` in `src/domain/merge.ts` combines two copies of the data (backup import,
+and device sync). It must stay deterministic and order-independent: `merge(a, b)` and `merge(b, a)`
+give the same games, players and tombstones, so devices converge.
+
+- Deleting a game or player adds a tombstone in the reducer, so the deletion survives a merge.
+- Changes that should win a merge must bump `updatedAt`: a game's on any change, including the draft,
+  and a player's on rename.
+- `merge.test.ts` checks the merge is order-independent; keep those checks when changing it.
 
 **Security**
 

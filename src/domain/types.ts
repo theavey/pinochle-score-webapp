@@ -19,6 +19,8 @@ export interface Player {
   id: PlayerId;
   name: string;
   createdAt: number;
+  /** Last rename; when devices disagree on a name, the newest wins. */
+  updatedAt: number;
 }
 
 /** What the defenders score when the bidding team throws in (concedes). */
@@ -112,12 +114,34 @@ export interface Settings {
   keepAwake: boolean;
 }
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
+
+export interface DeletedGame {
+  id: GameId;
+  at: number;
+}
+
+export interface RemovedPlayer {
+  id: PlayerId;
+  at: number;
+  /** Set when the player was merged into another; games are re-mapped to it. */
+  mergedInto: PlayerId | null;
+}
+
+/**
+ * Records of deletions, so merging with another device's (or a backup's)
+ * older copy doesn't bring deleted games or merged-away players back.
+ */
+export interface Tombstones {
+  games: DeletedGame[];
+  players: RemovedPlayer[];
+}
 
 export interface AppState {
   schemaVersion: typeof SCHEMA_VERSION;
   players: Player[];
   games: Game[];
+  tombstones: Tombstones;
   defaultRules: Rules;
   settings: Settings;
 }

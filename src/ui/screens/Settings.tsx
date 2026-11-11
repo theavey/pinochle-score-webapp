@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { MAX_NAME_LENGTH } from '../../domain/reducer';
 import type { AppState, Player, Rules } from '../../domain/types';
-import { backupFileName, exportBackup, mergeStates, parseBackup } from '../../storage/backup';
+import { backupFileName, exportBackup, mergeBackup, parseBackup } from '../../storage/backup';
 import { requestPersistence } from '../../storage/persist';
 import { Choice } from '../components/Choice';
 import { Dialog } from '../components/Dialog';
@@ -84,7 +84,12 @@ function PlayersSection() {
               class="row"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (dispatch({ type: 'renamePlayer', id: editing.id, name }, 'Player renamed'))
+                if (
+                  dispatch(
+                    { type: 'renamePlayer', id: editing.id, name, now: Date.now() },
+                    'Player renamed',
+                  )
+                )
                   close();
               }}
             >
@@ -120,7 +125,7 @@ function PlayersSection() {
                 onClick={() => {
                   if (
                     dispatch(
-                      { type: 'mergePlayers', from: editing.id, into: mergeInto },
+                      { type: 'mergePlayers', from: editing.id, into: mergeInto, now: Date.now() },
                       `Merged ${editing.name}`,
                     )
                   )
@@ -135,7 +140,13 @@ function PlayersSection() {
               type="button"
               class="btn btn-danger-outline"
               onClick={() => {
-                if (dispatch({ type: 'deletePlayer', id: editing.id }, 'Player removed')) close();
+                if (
+                  dispatch(
+                    { type: 'deletePlayer', id: editing.id, now: Date.now() },
+                    'Player removed',
+                  )
+                )
+                  close();
               }}
             >
               Remove player
@@ -164,7 +175,7 @@ function BackupSection() {
   const apply = (mode: 'merge' | 'replace') => {
     if (!pending) return;
     try {
-      const next = mode === 'merge' ? mergeStates(getState(), pending) : pending;
+      const next = mode === 'merge' ? mergeBackup(getState(), pending) : pending;
       dispatch(
         { type: 'replaceState', state: next },
         mode === 'merge' ? 'Backup merged' : 'Backup restored',
