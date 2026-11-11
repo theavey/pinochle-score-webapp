@@ -48,12 +48,16 @@ export function GameScreen({ id }: { id: string }) {
   if (score.status !== 'active') {
     const w = score.winner;
     const result = `${total(score.totals[0])}–${total(score.totals[1])}`;
-    banner =
-      score.status === 'abandoned'
-        ? `Game abandoned at ${result}`
-        : w === null
-          ? `Game ended in a tie, ${result}`
-          : `${teamName(state, game.seats, w)} win${score.status === 'called' ? ' (called)' : ''}, ${total(score.totals[w])}–${total(score.totals[w === 0 ? 1 : 0])}`;
+    if (score.status === 'abandoned') {
+      banner = `Game abandoned at ${result}`;
+    } else if (w === null) {
+      banner = `Game ended in a tie, ${result}`;
+    } else {
+      const [mine, theirs] = [score.totals[w], score.totals[w === 0 ? 1 : 0]];
+      const called = score.status === 'called' ? ' (called)' : '';
+      const lead = score.wonBy === 'lead' ? ` (ahead by ${mine - theirs})` : '';
+      banner = `${teamName(state, game.seats, w)} win${called}, ${total(mine)}–${total(theirs)}${lead}`;
+    }
   }
 
   if (showTable) {

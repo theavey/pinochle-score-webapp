@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { parseWhole } from '../../domain/draft';
-import { DEFAULT_RULES, RULE_LIMITS } from '../../domain/rules';
+import { DEFAULT_RULES, DEFAULT_WIN_BY_LEAD, RULE_LIMITS } from '../../domain/rules';
 import type { Rules, ThrowInDefenderScoring } from '../../domain/types';
 import { Choice } from './Choice';
 import { NumberField } from './NumberField';
@@ -11,7 +11,15 @@ interface Props {
   idPrefix: string;
 }
 
-type NumKey = 'targetScore' | 'minBid' | 'trickTotal';
+type NumKey = 'targetScore' | 'minBid' | 'trickTotal' | 'winByLead';
+
+/** Value a field's + button starts from when it's empty. */
+const START: Record<NumKey, number> = {
+  targetScore: DEFAULT_RULES.targetScore,
+  minBid: DEFAULT_RULES.minBid,
+  trickTotal: DEFAULT_RULES.trickTotal,
+  winByLead: DEFAULT_WIN_BY_LEAD,
+};
 
 export function RulesEditor({ rules, onChange, idPrefix }: Props) {
   // Keep raw text locally so a half-typed number doesn't get rejected mid-edit.
@@ -19,6 +27,7 @@ export function RulesEditor({ rules, onChange, idPrefix }: Props) {
     targetScore: String(rules.targetScore),
     minBid: String(rules.minBid),
     trickTotal: String(rules.trickTotal),
+    winByLead: String(rules.winByLead ?? DEFAULT_WIN_BY_LEAD),
   });
 
   const num = (key: NumKey, label: string, step: number) => {
@@ -38,7 +47,7 @@ export function RulesEditor({ rules, onChange, idPrefix }: Props) {
         step={step}
         min={lim.min}
         max={lim.max}
-        start={DEFAULT_RULES[key]}
+        start={START[key]}
         error={error}
         onChange={(v) => {
           setText({ ...text, [key]: v });
@@ -78,6 +87,22 @@ export function RulesEditor({ rules, onChange, idPrefix }: Props) {
         {num('minBid', 'Min bid', 1)}
         {num('trickTotal', 'Trick pts', 1)}
       </div>
+      <label class="toggle">
+        <input
+          type="checkbox"
+          checked={rules.winByLead !== null}
+          onChange={(e) => {
+            const on = e.currentTarget.checked;
+            setText({ ...text, winByLead: String(DEFAULT_WIN_BY_LEAD) });
+            onChange({ ...rules, winByLead: on ? DEFAULT_WIN_BY_LEAD : null });
+          }}
+        />
+        <span>
+          <strong>Win when ahead by</strong>
+          <small>A team that leads by this much wins, even below the target.</small>
+        </span>
+      </label>
+      {rules.winByLead !== null && num('winByLead', 'Lead needed to win', 10)}
       {toggle(
         'meldNeedsTrick',
         'Meld needs a trick',

@@ -91,6 +91,38 @@ test('ends a game early with the leader winning', async ({ page }) => {
   await expect(page.getByText(/Ann & Cy win \(called\)/)).toBeVisible();
 });
 
+test('ends the game when a team leads by the win-by-lead margin', async ({ page }) => {
+  const errors = watchConsole(page);
+  await startGame(page);
+
+  // Turn the rule on mid-game, with a small margin.
+  await page.getByRole('button', { name: 'Game menu' }).click();
+  await page.getByRole('button', { name: /Target score & rules/ }).click();
+  const dialog = page.getByRole('dialog');
+  const lead = dialog.getByLabel('Lead needed to win', { exact: true });
+  await expect(lead).toHaveCount(0);
+  await dialog.getByRole('checkbox', { name: /Win when ahead by/ }).check();
+  await expect(lead).toHaveValue('150');
+  await lead.fill('50');
+  await dialog.getByRole('button', { name: 'Apply' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Hand 1: Ann bids 25 and makes it (10 meld + 15 tricks); a 10-point lead.
+  await enterHand(page, { bidder: 'Ann', bid: 25, meld: [10, 5], defenderTricks: 10 });
+  await saveHand(page);
+  expect(await totals(page)).toEqual(['25', '15']);
+  await expect(page.getByRole('heading', { name: 'Hand 2' })).toBeVisible();
+
+  // Hand 2: Ann bids 25 on big meld (60 + 20 tricks). 105–25 is far below 150, but 80 ahead.
+  await enterHand(page, { bidder: 'Ann', bid: 25, meld: [60, 5], defenderTricks: 5 });
+  await saveHand(page);
+  expect(await totals(page)).toEqual(['105', '25']);
+  await expect(page.getByText('Ann & Cy win, 105–25 (ahead by 80)')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Final score' })).toBeVisible();
+
+  expect(errors).toEqual([]);
+});
+
 test('deletes a game from the game menu', async ({ page }) => {
   const errors = watchConsole(page);
   await startGame(page);
