@@ -20,7 +20,26 @@ const ELEMENTS: Record<string, string> = {
   table: '<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>',
 };
 
-for (const [name, html] of Object.entries(ELEMENTS)) {
+/** Elements that need script to reach the state the app puts them in. */
+const SCRIPTED: Record<string, { html: string; script: string }> = {
+  modalDialog: {
+    html: '<dialog id="d"><p>Body</p><button type="button">OK</button></dialog>',
+    script:
+      "const d = document.getElementById('d'); d.showModal(); setTimeout(() => { d.close(); d.remove(); }, 100);",
+  },
+  nonModalDialog: {
+    html: '<dialog id="d"><p>Body</p><button type="button">OK</button></dialog>',
+    script:
+      "const d = document.getElementById('d'); d.show(); setTimeout(() => { d.close(); d.remove(); }, 100);",
+  },
+};
+
+const cases = [
+  ...Object.entries(ELEMENTS).map(([name, html]) => ({ name, html, script: '' })),
+  ...Object.entries(SCRIPTED).map(([name, c]) => ({ name, ...c })),
+];
+
+for (const { name, html, script } of cases) {
   test(`<${name}> renders without CSP violations`, async ({ page }) => {
     expect(csp).toContain("style-src 'self'");
     const errors: string[] = [];
@@ -31,11 +50,15 @@ for (const [name, html] of Object.entries(ELEMENTS)) {
       route.fulfill({
         contentType: 'text/html',
         headers: { 'Content-Security-Policy': csp },
-        body: `<!doctype html><html><body>${html}</body></html>`,
+        body: `<!doctype html><html><body>${html}${script ? '<script src="/csp-probe.js"></script>' : ''}</body></html>`,
       }),
     );
+    // Same-origin script file: the CSP blocks inline scripts.
+    await page.route('**/csp-probe.js', (route) =>
+      route.fulfill({ contentType: 'text/javascript', body: script }),
+    );
     await page.goto('/csp-probe');
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(script ? 600 : 300);
     expect(errors).toEqual([]);
   });
 }
