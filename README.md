@@ -22,7 +22,7 @@ sync API).
   sideways instead. An iPad shows more, and stays on the scoresheet in landscape.
 - **Fix mistakes:** tap any earlier hand to edit or delete it, and every later total is recalculated. Undo is available after each save.
 - **Mid-game changes:**
-  - Change the target or rules.
+  - Change the target or rules (for example, turn on _win by lead_).
   - Substitute or swap players. Past hands keep who actually played them.
   - Correct the dealer after a misdeal.
   - End early (the leader wins) or abandon a game.
@@ -47,6 +47,7 @@ Each rule below is a setting. Every game keeps its own copy of the rules, so dif
 | Setting               | Default                                                                                                                   |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Play to               | 150 (can be changed mid-game)                                                                                             |
+| Win by lead           | Off; when on, a team that leads by 150 (adjustable) wins even below the target                                            |
 | Minimum bid           | 25                                                                                                                        |
 | Trick points per hand | 25 (A/10/K = 1 each, plus 1 for last trick)                                                                               |
 | Meld needs a trick    | On: a team's meld counts only if it takes a trick                                                                         |
@@ -65,6 +66,8 @@ How a hand is scored, where _B_ is the bidding team and _D_ is the defenders:
 - **Winning the game:**
   - If only one team is at or above the target, that team wins.
   - If both are, and "bidder goes out" is on and B made its bid, B wins. Otherwise the higher score wins, and a tie means you play another hand.
+  - If "win by lead" is on and the target hasn't decided the game, a team that leads by at least the margin wins, whatever the scores (a set can do it).
+  - Rule changes and edits apply to every hand, so the result is re-decided: turning "win by lead" on mid-game ends a game that's already that far ahead.
 
 The scoring code is in [`src/domain/scoring.ts`](src/domain/scoring.ts), and the cases are spelled out in
 [`scoring.test.ts`](src/domain/scoring.test.ts).

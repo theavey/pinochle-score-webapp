@@ -48,15 +48,33 @@ export function scoreHand(hand: Hand, rules: Rules): HandScore {
   return { bidderTeam: b, delta, made, meldCounted, bidderPoints };
 }
 
+/** Why a game was won: a team reached the target, or (optional rule) led by enough. */
+export type WinReason = 'target' | 'lead';
+
+export interface Win {
+  team: Team;
+  by: WinReason;
+}
+
 /**
  * Decide whether a hand ended the game, given totals after that hand.
- * Returns the winning team, or null if play continues.
+ * Returns the winning team and why, or null if play continues.
  */
 export function winnerAfterHand(
   totals: TeamPair<number>,
   score: HandScore,
   rules: Rules,
-): Team | null {
+): Win | null {
+  const byTarget = targetWinner(totals, score, rules);
+  if (byTarget !== null) return { team: byTarget, by: 'target' };
+  // Only when the target hasn't decided it: a big enough lead also ends the game.
+  if (rules.winByLead !== null && Math.abs(totals[0] - totals[1]) >= rules.winByLead) {
+    return { team: totals[0] > totals[1] ? 0 : 1, by: 'lead' };
+  }
+  return null;
+}
+
+function targetWinner(totals: TeamPair<number>, score: HandScore, rules: Rules): Team | null {
   const t = rules.targetScore;
   const over: TeamPair<boolean> = [totals[0] >= t, totals[1] >= t];
   if (over[0] && over[1]) {
@@ -85,8 +103,10 @@ export interface GameScore {
   status: GameStatus;
   /** Winning team, or null if active, abandoned, or called while tied. */
   winner: Team | null;
-  /** Index of the hand that reached the target, if any. */
+  /** Index of the hand that won the game, if any. */
   decidingHand: number | null;
+  /** Why the game was won (only when status is 'won'). */
+  wonBy: WinReason | null;
   /** Default dealer for the next hand. */
   nextDealer: Seat;
 }
@@ -99,6 +119,7 @@ export function scoreGame(
   const results: HandResult[] = [];
   let winner: Team | null = null;
   let decidingHand: number | null = null;
+  let wonBy: WinReason | null = null;
 
   for (const [index, hand] of game.hands.entries()) {
     const score = scoreHand(hand, game.rules);
@@ -106,9 +127,10 @@ export function scoreGame(
     totals[1] += score.delta[1];
     results.push({ hand, index, score, totals: [totals[0], totals[1]] });
     if (decidingHand === null) {
-      const w = winnerAfterHand(totals, score, game.rules);
-      if (w !== null) {
-        winner = w;
+      const win = winnerAfterHand(totals, score, game.rules);
+      if (win !== null) {
+        winner = win.team;
+        wonBy = win.by;
         decidingHand = index;
       }
     }
@@ -125,7 +147,7 @@ export function scoreGame(
   const last = game.hands[game.hands.length - 1];
   const nextDealer = last ? nextSeat(last.dealer) : game.firstDealer;
 
-  return { results, totals, status, winner, decidingHand, nextDealer };
+  return { results, totals, status, winner, decidingHand, wonBy, nextDealer };
 }
 
 export function isFinished(status: GameStatus): boolean {

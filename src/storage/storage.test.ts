@@ -5,7 +5,7 @@ import { DEFAULT_RULES } from '../domain/rules';
 import type { AppState } from '../domain/types';
 import { SCHEMA_VERSION } from '../domain/types';
 import { exportBackup, mergeBackup, parseBackup } from './backup';
-import { STORAGE_KEY, loadState, saveState } from './persist';
+import { STORAGE_KEY, loadState, migrate, saveState } from './persist';
 import { validateAppState } from './schema';
 
 class MemoryStorage implements Storage {
@@ -107,6 +107,14 @@ describe('validateAppState', () => {
     ['long name', (s) => ({ ...s, players: [{ ...s.players[0], name: 'x'.repeat(500) }] })],
     ['unknown player', (s) => ({ ...s, players: s.players.slice(1) })],
     ['duplicate seats', (s) => mutateGame(s, { seats: ['p0', 'p0', 'p1', 'p2'] })],
+    [
+      'zero win-by-lead margin',
+      (s) => mutateGame(s, { rules: { ...DEFAULT_RULES, winByLead: 0 } }),
+    ],
+    [
+      'fractional win-by-lead',
+      (s) => ({ ...s, defaultRules: { ...DEFAULT_RULES, winByLead: 1.5 } }),
+    ],
     ['not an object', () => 'hello'],
   ])('rejects %s', (_, f) => {
     expect(() => validateAppState(f(sample()))).toThrow();
@@ -123,6 +131,14 @@ function mutateHand(s: AppState, patch: Record<string, unknown>): unknown {
 }
 
 describe('persistence', () => {
+  it('round-trips the win-by-lead rule', () => {
+    const storage = new MemoryStorage();
+    const s = sample();
+    const on = { ...s, defaultRules: { ...s.defaultRules, winByLead: 150 } };
+    expect(saveState(storage, on)).toEqual({ ok: true });
+    expect(loadState(storage).state.defaultRules.winByLead).toBe(150);
+  });
+
   it('round-trips through storage, including the in-progress draft', () => {
     const storage = new MemoryStorage();
     expect(saveState(storage, sample())).toEqual({ ok: true });
@@ -210,12 +226,23 @@ describe('backup', () => {
 });
 
 describe('migrating older saves', () => {
-  /** A v1 save: the draft stored the bidding team's trick points. */
-  /** A save as v2 wrote it: no player updatedAt, no tombstones. */
-  function v2State(): Record<string, unknown> {
-    const s = JSON.parse(JSON.stringify(sample())) as Record<string, unknown> & {
-      players: Record<string, unknown>[];
+  type Raw = Record<string, unknown>;
+
+  /** A save as v3 wrote it: no win-by-lead rule. */
+  function v3State(): Raw {
+    const s = JSON.parse(JSON.stringify(sample())) as Raw & {
+      games: { rules: Raw }[];
+      defaultRules: Raw;
     };
+    s.schemaVersion = 3;
+    for (const g of s.games) delete g.rules.winByLead;
+    delete s.defaultRules.winByLead;
+    return s;
+  }
+
+  /** A save as v2 wrote it: also no player updatedAt, no tombstones. */
+  function v2State(): Raw {
+    const s = v3State() as Raw & { players: Raw[] };
     s.schemaVersion = 2;
     delete s.tombstones;
     s.players = s.players.map((p) => {
@@ -240,6 +267,40 @@ describe('migrating older saves', () => {
     return JSON.stringify(s);
   }
 
+  it('loads a v3 save with win-by-lead off, in every game and the defaults', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(STORAGE_KEY, JSON.stringify(v3State()));
+    const res = loadState(storage);
+    expect(res.warning).toBeNull();
+    expect(res.state.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(res.state.games[0]?.rules.winByLead).toBeNull();
+    expect(res.state.defaultRules.winByLead).toBeNull();
+    expect(res.state).toEqual(sample());
+  });
+
+  it('migrates v3 rules to v4 with an explicit winByLead: null', () => {
+    const m = migrate(v3State()) as {
+      schemaVersion: number;
+      games: { rules: Raw }[];
+      defaultRules: Raw;
+    };
+    expect(m.schemaVersion).toBe(4);
+    expect(m.games[0]?.rules).toHaveProperty('winByLead', null);
+    expect(m.defaultRules).toHaveProperty('winByLead', null);
+  });
+
+  it('imports a v3 backup', () => {
+    const text = JSON.stringify({
+      format: 'pinochle-score-backup',
+      exportedAt: '2026-11-01T00:00:00.000Z',
+      data: v3State(),
+    });
+    const s = parseBackup(text);
+    expect(s.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(s.games[0]?.rules.winByLead).toBeNull();
+    expect(s.defaultRules.winByLead).toBeNull();
+  });
+
   it('loads a v2 save: players get updatedAt, tombstones start empty', () => {
     const storage = new MemoryStorage();
     storage.setItem(STORAGE_KEY, JSON.stringify(v2State()));
@@ -249,6 +310,7 @@ describe('migrating older saves', () => {
     expect(res.state.tombstones).toEqual({ games: [], players: [] });
     for (const p of res.state.players) expect(p.updatedAt).toBe(p.createdAt);
     expect(res.state.games).toEqual(sample().games);
+    expect(res.state.defaultRules.winByLead).toBeNull();
   });
 
   it('converts a half-entered hand to the defending team’s trick points', () => {
@@ -262,6 +324,8 @@ describe('migrating older saves', () => {
     expect(res.state.games[0]?.draft).not.toHaveProperty('bidderTricks');
     // Everything else is untouched.
     expect(res.state.games[0]?.hands).toEqual(sample().games[0]?.hands);
+    expect(res.state.games[0]?.rules.winByLead).toBeNull();
+    expect(res.state.defaultRules.winByLead).toBeNull();
   });
 
   it('clears trick points it cannot convert', () => {
