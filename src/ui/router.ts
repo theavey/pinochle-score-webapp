@@ -7,14 +7,14 @@ export type Route =
   | { name: 'history' }
   | { name: 'stats' }
   | { name: 'settings' }
-  /** Invite link: #/join/<sync code>. The fragment never reaches any server. */
+  /** Invite link: #/join/<one-time invite>. The fragment never reaches any server. */
   | { name: 'join'; code: string };
 
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#/, '') || '/';
   const game = /^\/game\/([A-Za-z0-9-]{1,64})$/.exec(path);
   if (game?.[1]) return { name: 'game', id: game[1] };
-  const join = /^\/join\/([0-9A-Za-z-]{20,64})$/.exec(path);
+  const join = /^\/join\/([0-9A-Za-z-]{1,64})$/.exec(path);
   if (join?.[1]) return { name: 'join', code: join[1] };
   switch (path) {
     case '/new':

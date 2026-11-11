@@ -65,3 +65,43 @@ export function constantTimeEqual(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+// ---------- Invites ----------
+// An invite holds a sync code, encrypted with a key derived from a short
+// one-time invite code. The server sees only the invite id and ciphertext,
+// hands it out once, and forgets it after an hour either way.
+
+/** 16 bytes as lowercase hex. */
+export const INVITE_ID_PATTERN = /^[0-9a-f]{32}$/;
+/** How long an unclaimed invite stays usable. */
+export const INVITE_TTL_MS = 60 * 60 * 1000;
+/** An encrypted sync code is about 100 characters; anything much bigger isn't an invite. */
+export const MAX_INVITE_DATA_CHARS = 512;
+
+export const invitePath = (inviteId: string) => `/api/invite/${inviteId}`;
+export const inviteClaimPath = (inviteId: string) => `/api/invite/${inviteId}/claim`;
+
+/** PUT body to create an invite. */
+export interface InvitePut {
+  data: string;
+}
+/** POST .../claim result (the invite is deleted as it's returned). */
+export interface InviteClaim {
+  data: string;
+}
+
+export function isInvitePut(v: unknown): v is InvitePut {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.data === 'string' &&
+    o.data.length > 0 &&
+    o.data.length <= MAX_INVITE_DATA_CHARS &&
+    /^[A-Za-z0-9+/]+={0,2}$/.test(o.data)
+  );
+}
+
+/** An invite can be claimed until its expiry time (exclusive). */
+export function inviteLive(expiresAt: number, now: number): boolean {
+  return now < expiresAt;
+}

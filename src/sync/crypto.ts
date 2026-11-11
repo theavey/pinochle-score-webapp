@@ -9,6 +9,13 @@
  * Data is gzipped, then encrypted with a fresh random IV every time; the
  * groupId is bound in as additional data so a blob can't be moved to another
  * group.
+ *
+ * Invites: the sync code is permanent, so it's never handed out directly. An
+ * invite is a short one-time code (10 base32 characters, 50 bits). A slow
+ * PBKDF2 turns it into an invite id (all the server sees) and a key that
+ * encrypts the sync code for the server to hold until the invite is claimed
+ * once or expires. The slow derivation keeps 50 bits out of practical reach
+ * even for someone holding the server's copy during the invite's short life.
  */
 
 /** Byte arrays backed by a plain ArrayBuffer (what WebCrypto accepts). */
@@ -21,6 +28,15 @@ const SALT = new TextEncoder().encode('pinochle-score sync v1');
 export interface SyncKeys {
   groupId: string;
   authToken: string;
+  key: CryptoKey;
+}
+
+export const INVITE_LENGTH = 10;
+const INVITE_SALT = new TextEncoder().encode('pinochle-score invite v1');
+const INVITE_ITERATIONS = 600_000;
+
+export interface InviteKeys {
+  inviteId: string;
   key: CryptoKey;
 }
 
@@ -51,6 +67,57 @@ export function parseCode(input: string): Bytes | null {
   return new Uint8Array(out);
 }
 
+/** A new one-time invite code, e.g. "7KQ2M-X9ARD". */
+export function generateInvite(): string {
+  // 256 is a multiple of 32, so masking each byte gives every character equal odds.
+  const bytes = crypto.getRandomValues(new Uint8Array(INVITE_LENGTH));
+  return formatInvite([...bytes].map((b) => ALPHABET.charAt(b & 31)).join(''));
+}
+
+/** Parse an invite as typed (same forgiving rules as parseCode); null if it isn't one. */
+export function parseInvite(input: string): string | null {
+  const clean = input.toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
+  return new RegExp(`^[0-9A-HJKMNP-TV-Z]{${INVITE_LENGTH}}$`).test(clean) ? clean : null;
+}
+
+export function formatInvite(invite: string): string {
+  const half = INVITE_LENGTH / 2;
+  return `${invite.slice(0, half)}-${invite.slice(half)}`;
+}
+
+/** Invite id and key from a parsed invite (deliberately slow: PBKDF2, 600k rounds). */
+export async function deriveInviteKeys(invite: string): Promise<InviteKeys> {
+  const base = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(invite),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  );
+  const bits = new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: INVITE_SALT, iterations: INVITE_ITERATIONS },
+      base,
+      384,
+    ),
+  );
+  const key = await crypto.subtle.importKey('raw', bits.slice(16), 'AES-GCM', false, [
+    'encrypt',
+    'decrypt',
+  ]);
+  return { inviteId: hex(bits.slice(0, 16)), key };
+}
+
+/** Encrypt the sync code for an invite. */
+export function sealInvite(keys: InviteKeys, syncCode: string): Promise<string> {
+  return seal(keys.key, keys.inviteId, syncCode);
+}
+
+/** Recover the sync code from a claimed invite. Throws if the invite or data is wrong. */
+export function openInvite(keys: InviteKeys, data: string): Promise<string> {
+  return unseal(keys.key, keys.inviteId, data);
+}
+
 export async function deriveKeys(code: Bytes): Promise<SyncKeys> {
   const ikm = await crypto.subtle.importKey('raw', code, 'HKDF', false, [
     'deriveBits',
@@ -75,13 +142,23 @@ export async function deriveKeys(code: Bytes): Promise<SyncKeys> {
 }
 
 /** gzip + AES-GCM; returns base64 of (12-byte IV || ciphertext). */
-export async function encrypt(keys: SyncKeys, plaintext: string): Promise<string> {
+export function encrypt(keys: SyncKeys, plaintext: string): Promise<string> {
+  return seal(keys.key, keys.groupId, plaintext);
+}
+
+/** Reverse of encrypt. Throws if the data was tampered with or the key is wrong. */
+export function decrypt(keys: SyncKeys, data: string): Promise<string> {
+  return unseal(keys.key, keys.groupId, data);
+}
+
+/** gzip + AES-GCM with `aad` bound in; base64 of (12-byte IV || ciphertext). */
+async function seal(key: CryptoKey, aad: string, plaintext: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const packed = await gzip(new TextEncoder().encode(plaintext));
   const sealed = new Uint8Array(
     await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(keys.groupId) },
-      keys.key,
+      { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(aad) },
+      key,
       packed,
     ),
   );
@@ -91,17 +168,12 @@ export async function encrypt(keys: SyncKeys, plaintext: string): Promise<string
   return base64(out);
 }
 
-/** Reverse of encrypt. Throws if the data was tampered with or the key is wrong. */
-export async function decrypt(keys: SyncKeys, data: string): Promise<string> {
+async function unseal(key: CryptoKey, aad: string, data: string): Promise<string> {
   const bytes = fromBase64(data);
   if (bytes.length < 13) throw new Error('Sync data is damaged');
   const packed = await crypto.subtle.decrypt(
-    {
-      name: 'AES-GCM',
-      iv: bytes.slice(0, 12),
-      additionalData: new TextEncoder().encode(keys.groupId),
-    },
-    keys.key,
+    { name: 'AES-GCM', iv: bytes.slice(0, 12), additionalData: new TextEncoder().encode(aad) },
+    key,
     bytes.slice(12),
   );
   return new TextDecoder().decode(await gunzip(new Uint8Array(packed)));

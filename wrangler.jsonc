@@ -20,16 +20,29 @@
     "not_found_handling": "none",
     "run_worker_first": ["/api/*"],
   },
-  // One Durable Object per sync group: stores that group's encrypted data and
-  // tells connected devices when it changes.
+  // One Durable Object per sync group (its encrypted data, and live notices to
+  // connected devices), and one per pending one-time invite.
   "durable_objects": {
-    "bindings": [{ "name": "SYNC_GROUPS", "class_name": "SyncGroup" }],
+    "bindings": [
+      { "name": "SYNC_GROUPS", "class_name": "SyncGroup" },
+      { "name": "INVITES", "class_name": "Invite" },
+    ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncGroup"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SyncGroup"] },
+    { "tag": "v2", "new_sqlite_classes": ["Invite"] },
+  ],
   // Per-IP request limit for the sync API (approximate, per Cloudflare location).
   // Generous: several devices at one table share an IP and sync often.
   "ratelimits": [
     { "name": "SYNC_RATE_LIMIT", "namespace_id": "4201", "simple": { "limit": 600, "period": 60 } },
+    // Invite codes are short, so creating and claiming them is limited much
+    // harder to make guessing one impractical.
+    {
+      "name": "INVITE_RATE_LIMIT",
+      "namespace_id": "4202",
+      "simple": { "limit": 60, "period": 60 },
+    },
   ],
   // Custom domain: add "pinochle.theavey.com" in the Cloudflare dashboard
   // (Workers & Pages → pinochle-score-webapp → Settings → Domains & Routes),

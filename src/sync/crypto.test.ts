@@ -1,6 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { decrypt, deriveKeys, encrypt, formatCode, generateCode, parseCode } from './crypto';
-import { AUTH_TOKEN_PATTERN, GROUP_ID_PATTERN } from './protocol';
+import {
+  decrypt,
+  deriveInviteKeys,
+  deriveKeys,
+  encrypt,
+  formatCode,
+  generateCode,
+  generateInvite,
+  openInvite,
+  parseCode,
+  parseInvite,
+  sealInvite,
+} from './crypto';
+import {
+  AUTH_TOKEN_PATTERN,
+  GROUP_ID_PATTERN,
+  INVITE_ID_PATTERN,
+  MAX_INVITE_DATA_CHARS,
+  inviteLive,
+  isInvitePut,
+} from './protocol';
 
 describe('sync codes', () => {
   it('generates 32-character codes in groups of four that parse back', () => {
@@ -77,5 +96,57 @@ describe('encrypt / decrypt', () => {
     bytes[20] = (bytes[20] ?? 0) ^ 1;
     const tampered = btoa(String.fromCharCode(...bytes));
     await expect(decrypt(keys, tampered)).rejects.toThrow();
+  });
+});
+
+describe('invites', () => {
+  it('generates short codes that parse back, forgiving typing', () => {
+    const invite = generateInvite();
+    expect(invite).toMatch(/^[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$/);
+    expect(parseInvite(invite)).toBe(invite.replace('-', ''));
+    expect(parseInvite(' 7kq2m x9ard ')).toBe('7KQ2MX9ARD');
+    expect(parseInvite('oIL2M-X9ARD')).toBe('0112MX9ARD');
+  });
+
+  it('rejects anything that is not an invite, including old permanent sync codes', () => {
+    expect(parseInvite('7KQ2M-X9AR')).toBeNull();
+    expect(parseInvite('7KQ2M-X9ARU')).toBeNull();
+    expect(parseInvite(generateCode())).toBeNull();
+  });
+
+  it('round-trips a sync code; the invite id reveals neither', async () => {
+    const invite = parseInvite(generateInvite()) ?? '';
+    const groupCode = generateCode();
+    const keys = await deriveInviteKeys(invite);
+    expect(keys.inviteId).toMatch(INVITE_ID_PATTERN);
+    expect(keys.inviteId).not.toContain(invite.toLowerCase());
+    const sealed = await sealInvite(keys, groupCode);
+    expect(sealed).not.toContain(groupCode);
+    expect(isInvitePut({ data: sealed })).toBe(true);
+    expect(sealed.length).toBeLessThanOrEqual(MAX_INVITE_DATA_CHARS);
+    expect(await openInvite(await deriveInviteKeys(invite), sealed)).toBe(groupCode);
+  });
+
+  it('a different invite cannot open it', async () => {
+    const keys = await deriveInviteKeys(parseInvite(generateInvite()) ?? '');
+    const other = await deriveInviteKeys(parseInvite(generateInvite()) ?? '');
+    const sealed = await sealInvite(keys, generateCode());
+    expect(other.inviteId).not.toBe(keys.inviteId);
+    await expect(openInvite(other, sealed)).rejects.toThrow();
+    // Same key but a different id (moved to another invite) fails too.
+    await expect(openInvite({ ...keys, inviteId: other.inviteId }, sealed)).rejects.toThrow();
+  });
+
+  it('expires at the deadline', () => {
+    expect(inviteLive(1000, 999)).toBe(true);
+    expect(inviteLive(1000, 1000)).toBe(false);
+  });
+
+  it('accepts only small base64 payloads', () => {
+    expect(isInvitePut({ data: 'QUJD' })).toBe(true);
+    expect(isInvitePut({ data: '' })).toBe(false);
+    expect(isInvitePut({ data: 'not base64!' })).toBe(false);
+    expect(isInvitePut({ data: 'A'.repeat(MAX_INVITE_DATA_CHARS + 4) })).toBe(false);
+    expect(isInvitePut(null)).toBe(false);
   });
 });

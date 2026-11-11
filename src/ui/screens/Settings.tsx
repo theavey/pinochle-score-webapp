@@ -8,14 +8,16 @@ import { ConfirmDialog, Dialog } from '../components/Dialog';
 import { RulesEditor } from '../components/RulesEditor';
 import { href } from '../router';
 import {
-  getSyncCode,
+  createInvite,
   inviteLink,
-  joinGroup,
+  isSyncOn,
+  joinWithInvite,
   resetGroup,
   startNewGroup,
   stopSync,
   useSyncStatus,
 } from '../../sync/engine';
+import type { Invite } from '../../sync/engine';
 import { dispatch, getState, showToast, useStore } from '../store';
 
 function plural(n: number, word: string): string {
@@ -169,15 +171,29 @@ function PlayersSection() {
 
 function SyncSection() {
   const status = useSyncStatus();
-  const syncCode = getSyncCode();
+  const on = isSyncOn();
   const [joining, setJoining] = useState(false);
   const [typed, setTyped] = useState('');
-  const [showCode, setShowCode] = useState(false);
+  const [invite, setInvite] = useState<Invite | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const share = async (c: string) => {
-    const url = inviteLink(c);
+  /** Make a one-time invite and offer it through the share sheet (or show it). */
+  const makeInvite = async () => {
+    setBusy(true);
+    try {
+      const made = await createInvite();
+      setInvite(made);
+      await shareInvite(made);
+    } catch {
+      showToast('Could not make an invite right now. Try again when online.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const shareInvite = async (inv: Invite) => {
+    const url = inviteLink(inv.code);
     if ('share' in navigator) {
       try {
         await navigator.share({ title: 'Join my pinochle scores', url });
@@ -190,7 +206,7 @@ function SyncSection() {
       await navigator.clipboard.writeText(url);
       showToast('Invite link copied');
     } catch {
-      setShowCode(true);
+      /* the code is on screen to type instead */
     }
   };
 
@@ -205,10 +221,14 @@ function SyncSection() {
             ? status.message
             : 'Off';
 
+  const expiry = invite
+    ? new Date(invite.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : '';
+
   return (
     <section class="card" aria-labelledby="sync-title">
       <h2 id="sync-title">Sync between devices</h2>
-      {syncCode === null ? (
+      {!on ? (
         <>
           <p class="muted small">
             Keep games in step across your phone, iPad and other devices (they can show the live
@@ -223,7 +243,7 @@ function SyncSection() {
               onClick={() => {
                 setBusy(true);
                 void startNewGroup()
-                  .then((c) => share(c))
+                  .then(() => makeInvite())
                   .finally(() => {
                     setBusy(false);
                   });
@@ -248,12 +268,21 @@ function SyncSection() {
               onSubmit={(e) => {
                 e.preventDefault();
                 setBusy(true);
-                void joinGroup(typed)
-                  .then((ok) => {
-                    if (ok) {
+                void joinWithInvite(typed)
+                  .then((result) => {
+                    if (result === 'joined') {
                       setTyped('');
                       setJoining(false);
+                      showToast('Joined. Games are syncing.');
+                    } else if (result === 'used') {
+                      showToast(
+                        'That invite was already used or has expired. Ask for a new one.',
+                        'error',
+                      );
                     } else showToast('That code isn’t valid. Check it and try again.', 'error');
+                  })
+                  .catch(() => {
+                    showToast('Could not join right now. Try again when online.', 'error');
                   })
                   .finally(() => {
                     setBusy(false);
@@ -263,8 +292,8 @@ function SyncSection() {
               <input
                 class="grow"
                 type="text"
-                aria-label="Sync code"
-                placeholder="XXXX-XXXX-…"
+                aria-label="Invite code"
+                placeholder="XXXXX-XXXXX"
                 autoComplete="off"
                 autoCapitalize="characters"
                 spellcheck={false}
@@ -285,27 +314,48 @@ function SyncSection() {
             {statusText}
           </p>
           <div class="row wrap">
-            <button type="button" class="btn btn-primary" onClick={() => void share(syncCode)}>
-              Share invite link
-            </button>
             <button
               type="button"
-              class="btn"
-              onClick={() => {
-                setShowCode(!showCode);
-              }}
+              class="btn btn-primary"
+              disabled={busy}
+              onClick={() => void makeInvite()}
             >
-              {showCode ? 'Hide code' : 'Show code'}
+              Invite a device
             </button>
           </div>
-          {showCode && (
-            <p class="sync-code" aria-label="Sync code">
-              {syncCode}
-            </p>
+          {invite && (
+            <div class="invite">
+              <p class="small">
+                Open the link on the other device, or type this code under <em>Join with a code</em>
+                :
+              </p>
+              <p class="sync-code" aria-label="Invite code">
+                {invite.code}
+              </p>
+              <p class="muted tiny">Works once, until {expiry}.</p>
+              <div class="row wrap">
+                <button
+                  type="button"
+                  class="btn btn-small"
+                  onClick={() => void shareInvite(invite)}
+                >
+                  Share invite link
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-small"
+                  onClick={() => {
+                    setInvite(null);
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
           )}
           <p class="muted tiny">
-            Treat the link and code like a password: anyone with them can see and change these
-            games.
+            Each invite works once and expires after an hour, so an old link or code that turns up
+            later can’t be used. Devices that have joined stay in the group until you reset it.
           </p>
           <div class="row wrap">
             <button type="button" class="btn btn-small" onClick={stopSync}>
@@ -318,22 +368,23 @@ function SyncSection() {
                 setConfirmReset(true);
               }}
             >
-              Reset sync code…
+              Reset sync group…
             </button>
           </div>
           <ConfirmDialog
             open={confirmReset}
-            title="Reset the sync code?"
-            message="The group's copy on the server is erased and a new code is made from this device's games. Every other device stops syncing until it joins again with the new invite link. Use this if a device with the old code was lost."
-            confirmLabel="Reset code"
+            title="Reset the sync group?"
+            message="The group's copy on the server is erased and a new group is made from this device's games. Every other device stops syncing until it joins again with a new invite. Use this if a device that joined was lost or shouldn't have access any more."
+            confirmLabel="Reset group"
             danger
             onCancel={() => {
               setConfirmReset(false);
             }}
             onConfirm={() => {
               setConfirmReset(false);
+              setInvite(null);
               void resetGroup()
-                .then((c) => share(c))
+                .then(() => makeInvite())
                 .catch(() => {
                   showToast('Could not reset right now. Try again when online.', 'error');
                 });

@@ -31,7 +31,9 @@ sync API).
   - Per-partnership win–loss records.
   - Stats follow _people_, not seats, so changing partners is fine.
 - **Sync between devices (optional):** Settings → _Sync between devices_ → **Start syncing**, then
-  send the invite link to your other devices (AirDrop or Messages). Games sync in the background
+  send the invite link to your other device (AirDrop or Messages), or type its short code there under
+  _Join with a code_. Each invite works once and expires after an hour; tap **Invite a device** for
+  another. Games sync in the background
   within a second or two, including a half-entered hand, so an iPad's table display shows the live
   bid typed on a phone. It works offline and catches up later. Data is encrypted on each device
   before it's sent; see [Security](#security).
@@ -168,7 +170,7 @@ After that, every push to `main` deploys automatically, and other branches get p
 ## Security
 
 - **Mostly static:** no accounts, cookies, third-party scripts, fonts or analytics. The only
-  server code is the sync API (`/api/sync/*`).
+  server code is the sync API (`/api/sync/*` and `/api/invite/*`).
 - **Sync is end-to-end encrypted** (`src/sync/crypto.ts`, WebCrypto only):
   - A sync code is 160 random bits. HKDF derives three independent values from it: the group id
     (all the server sees), an access token (the server stores only its SHA-256 hash and compares in
@@ -176,12 +178,21 @@ After that, every push to `main` deploys automatically, and other branches get p
   - Data is gzipped and encrypted with a fresh IV on every upload, bound to the group id. The server
     stores one encrypted blob per group and can't read it; a test checks no player names are ever
     uploaded in the clear.
-  - The invite link carries the code in the URL _fragment_ (`#/join/…`), which browsers never send
-    to a server, and the app removes it from the address bar after joining. The link is still a
-    secret: anyone with it can see and change that group's games. "Reset sync code" erases the
-    server copy and issues a new code.
+  - The sync code itself is never shown or shared. Devices join with a **one-time invite**: a short
+    code (10 characters, 50 bits). PBKDF2 (600,000 rounds) derives from it an invite id, which is all
+    the server sees, and a key that encrypts the sync code. The server hands that ciphertext out
+    **once** and deletes it when claimed or after **an hour**, so an invite that leaks later is
+    useless. The slow key derivation and a strict per-IP limit on invite requests make guessing
+    one impractical.
+  - The invite link carries the invite in the URL _fragment_ (`#/join/…`), which browsers never send
+    to a server. Opening the link does nothing until you tap _Join_, so link previews can't use it
+    up. If an invite was already used when you try it, someone else got there first: reset the group.
+  - A device that has joined keeps the sync code until it stops syncing. To remove a lost device,
+    use **Reset sync group** on another device: it erases the server copy and starts a new group,
+    and the other devices rejoin with new invites. Links shared before invites became one-time
+    carried the permanent code: reset the group once to make them useless.
   - The API (`src/worker/`) only accepts same-origin requests, caps uploads at about 1.4 MB,
-    rate-limits per IP, rejects stale writes (409, so concurrent edits merge instead of
+    rate-limits per IP (invites much more strictly), rejects stale writes (409, so concurrent edits merge instead of
     overwriting), and deletes groups unused for over a year.
 - **Strict headers** in [`public/_headers`](public/_headers):
   - CSP `script-src 'self'`, with no inline scripts and no `eval`.

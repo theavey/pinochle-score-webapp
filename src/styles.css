@@ -1116,10 +1116,16 @@ details summary {
 }
 
 /* ---------- Sync ---------- */
+.invite {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
 .sync-code {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 1.05rem;
-  letter-spacing: 0.04em;
+  font-size: 1.5rem;
+  text-align: center;
+  letter-spacing: 0.12em;
   word-break: break-all;
   padding: 10px 12px;
   border-radius: 10px;

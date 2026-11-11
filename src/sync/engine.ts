@@ -4,10 +4,30 @@ import type { AppState } from '../domain/types';
 import { getStorage, migrate } from '../storage/persist';
 import { validateAppState } from '../storage/schema';
 import { applySyncedState, getState, onStateChange } from '../ui/store';
-import { decrypt, deriveKeys, encrypt, formatCode, generateCode, parseCode } from './crypto';
+import {
+  decrypt,
+  deriveInviteKeys,
+  deriveKeys,
+  encrypt,
+  formatCode,
+  generateCode,
+  generateInvite,
+  openInvite,
+  parseCode,
+  parseInvite,
+  sealInvite,
+} from './crypto';
 import type { SyncKeys } from './crypto';
-import { LIVE_AUTH_PREFIX, LIVE_PROTOCOL, livePath, syncPath } from './protocol';
-import type { LiveNotice, SyncGet, SyncPutOk } from './protocol';
+import {
+  INVITE_TTL_MS,
+  LIVE_AUTH_PREFIX,
+  LIVE_PROTOCOL,
+  inviteClaimPath,
+  invitePath,
+  livePath,
+  syncPath,
+} from './protocol';
+import type { InviteClaim, LiveNotice, SyncGet, SyncPutOk } from './protocol';
 
 /**
  * Background sync: pull the group's encrypted copy, merge it with this
@@ -55,9 +75,9 @@ export function getSyncStatus(): SyncStatus {
   return status;
 }
 
-/** The current sync code (secret), or null when sync is off. */
-export function getSyncCode(): string | null {
-  return code;
+/** Whether this device is in a sync group. (The group's code itself is never shown.) */
+export function isSyncOn(): boolean {
+  return code !== null;
 }
 
 export function useSyncStatus(): SyncStatus {
@@ -74,9 +94,62 @@ export function useSyncStatus(): SyncStatus {
   return status;
 }
 
-/** Link that joins another device to this group. The code is in the #fragment, which browsers never send to a server. */
-export function inviteLink(syncCode: string): string {
-  return `${window.location.origin}/#/join/${syncCode}`;
+/** Link for a one-time invite. It's in the #fragment, which browsers never send to a server. */
+export function inviteLink(invite: string): string {
+  return `${window.location.origin}/#/join/${invite}`;
+}
+
+export interface Invite {
+  /** Formatted invite code, e.g. "7KQ2M-X9ARD". */
+  code: string;
+  expiresAt: number;
+}
+
+/**
+ * Make a one-time invite for another device: the group's code, encrypted with
+ * a key from a fresh short invite code, held by the server until it's claimed
+ * once or an hour passes.
+ */
+export async function createInvite(): Promise<Invite> {
+  const groupCode = code;
+  if (!groupCode) throw new Error('Sync is off');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const invite = generateInvite();
+    const parsed = parseInvite(invite);
+    if (!parsed) throw new Error('Invalid invite');
+    const ik = await deriveInviteKeys(parsed);
+    const data = await sealInvite(ik, groupCode);
+    const res = await fetch(invitePath(ik.inviteId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+      cache: 'no-store',
+    });
+    if (res.status === 409) continue; // vanishingly unlikely: that invite is taken
+    if (!res.ok) throw new SyncHttpError(res.status);
+    return { code: invite, expiresAt: Date.now() + INVITE_TTL_MS };
+  }
+  throw new Error('Could not create an invite');
+}
+
+export type JoinResult = 'joined' | 'invalid' | 'used';
+
+/**
+ * Join a group with a one-time invite (from a link or typed). Claiming uses
+ * the invite up, so call this only when the person taps Join.
+ */
+export async function joinWithInvite(input: string): Promise<JoinResult> {
+  const invite = parseInvite(input);
+  if (!invite) return 'invalid';
+  const ik = await deriveInviteKeys(invite);
+  const res = await fetch(inviteClaimPath(ik.inviteId), { method: 'POST', cache: 'no-store' });
+  if (res.status === 404) return 'used';
+  if (!res.ok) throw new SyncHttpError(res.status);
+  const { data } = (await res.json()) as InviteClaim;
+  const groupCode = parseCode(await openInvite(ik, data));
+  if (!groupCode) throw new Error('Invite held an invalid code');
+  await begin(formatCode(groupCode));
+  return 'joined';
 }
 
 /** Start sync on app launch if this device was set up before. */
@@ -98,19 +171,9 @@ export function initSync(): void {
   if (saved) void begin(saved);
 }
 
-/** Start a new sync group from this device. Returns its code. */
-export async function startNewGroup(): Promise<string> {
-  const fresh = generateCode();
-  await begin(fresh, true);
-  return fresh;
-}
-
-/** Join an existing group. Returns false if the code isn't valid. */
-export async function joinGroup(input: string): Promise<boolean> {
-  const bytes = parseCode(input);
-  if (!bytes) return false;
-  await begin(formatCode(bytes));
-  return true;
+/** Start a new sync group from this device. */
+export async function startNewGroup(): Promise<void> {
+  await begin(generateCode(), true);
 }
 
 /** Stop syncing on this device. Its data stays; the group and other devices are unaffected. */
@@ -135,13 +198,13 @@ export function stopSync(): void {
  * this device's data. Other devices must rejoin with the new link. Use after
  * losing a device that had the old code.
  */
-export async function resetGroup(): Promise<string> {
+export async function resetGroup(): Promise<void> {
   if (keys) {
     const res = await api(keys, 'DELETE');
     if (!res.ok && res.status !== 404) throw new SyncHttpError(res.status);
   }
   stopSync();
-  return startNewGroup();
+  await startNewGroup();
 }
 
 /** Sync as soon as possible. Concurrent calls coalesce into one extra run. */
@@ -240,7 +303,7 @@ function describeError(err: unknown): SyncStatus {
       return {
         state: 'error',
         message:
-          'This sync code no longer works (it may have been reset on another device). Stop syncing here and join with the new invite link.',
+          'This device’s sync group was reset on another device. Stop syncing here, then join with a new invite.',
       };
     }
     if (err.status === 429)
