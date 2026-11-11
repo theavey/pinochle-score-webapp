@@ -43,6 +43,7 @@ const tombstones: Validator<Tombstones> = obj({
 
 export const rulesValidator: Validator<Rules> = obj({
   targetScore: int(RULE_LIMITS.targetScore),
+  winByLead: nullable(int(RULE_LIMITS.winByLead)),
   minBid: int(RULE_LIMITS.minBid),
   trickTotal: int(RULE_LIMITS.trickTotal),
   meldNeedsTrick: bool,

@@ -63,6 +63,20 @@ function migrateV2toV3(state: Obj): Obj {
 }
 
 /**
+ * v3 -> v4: rules get `winByLead` (win as soon as a team leads by that many
+ * points). Off for every existing game and for the default rules, so no
+ * finished or in-progress game changes outcome.
+ */
+function migrateV3toV4(state: Obj): Obj {
+  const withRule = (r: unknown) =>
+    isObj(r) && !('winByLead' in r) ? { ...r, winByLead: null } : r;
+  const games = Array.isArray(state.games)
+    ? state.games.map((g: unknown) => (isObj(g) ? { ...g, rules: withRule(g.rules) } : g))
+    : state.games;
+  return { ...state, games, defaultRules: withRule(state.defaultRules), schemaVersion: 4 };
+}
+
+/**
  * Bring older saved formats up to the current schema, one version at a
  * time. Anything unrecognized is passed through for validation to reject.
  */
@@ -71,6 +85,7 @@ export function migrate(raw: unknown): unknown {
   let state = raw;
   if (state.schemaVersion === 1) state = migrateV1toV2(state);
   if (state.schemaVersion === 2) state = migrateV2toV3(state);
+  if (state.schemaVersion === 3) state = migrateV3toV4(state);
   return state;
 }
 
