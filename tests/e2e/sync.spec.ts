@@ -41,6 +41,7 @@ test('two devices sync games, live bids and deletions, encrypted', async ({ page
   expect(b.url()).not.toContain(code);
   await b.goto('/#/history');
   await expect(b.getByText('Ann & Cy')).toBeVisible({ timeout: 10_000 });
+  expect(errorsB, 'console errors on B after joining').toEqual([]);
 
   // A bid typed on A shows live on B's table display.
   await b.goto(gameUrl.slice(gameUrl.indexOf('#')));
@@ -52,6 +53,7 @@ test('two devices sync games, live bids and deletions, encrypted', async ({ page
     .click();
   await page.getByLabel('Bid', { exact: true }).fill('30');
   await expect(b.getByText(/Bob bid 30/)).toBeVisible({ timeout: 10_000 });
+  expect(errorsB, 'console errors on B on the table display').toEqual([]);
 
   // Deleting the game on B removes it on A.
   await b.getByRole('button', { name: 'Scoresheet' }).click();
