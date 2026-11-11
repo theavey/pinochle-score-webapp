@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RULES } from './rules';
+import { DEFAULT_RULES, describeRules } from './rules';
 import { scoreGame, scoreHand } from './scoring';
 import type { Game, Hand, PlayedHand, Rules, Seat, ThrownInHand } from './types';
 
@@ -223,5 +223,131 @@ describe('scoreGame', () => {
   it('negative totals are allowed', () => {
     const hands = [played({ bidder: 0, bid: 50, meld: [0, 0], tricks: [10, 15] })];
     expect(scoreGame(game(hands)).totals).toEqual([-50, 15]);
+  });
+});
+
+describe('win by lead', () => {
+  // Team 0 takes 140 while team 1 is set on a bid of 60: a 200-point lead, below the target.
+  const bigLead = () => played({ bidder: 1, bid: 60, meld: [115, 0], tricks: [25, 0] });
+
+  it('is off by default: a big lead below the target keeps playing', () => {
+    expect(DEFAULT_RULES.winByLead).toBeNull();
+    const s = scoreGame(game([bigLead()]));
+    expect(s.totals).toEqual([140, -60]);
+    expect(s.status).toBe('active');
+    expect(s.winner).toBeNull();
+    expect(s.wonBy).toBeNull();
+  });
+
+  it('when on, the leader wins once the lead reaches the margin', () => {
+    const s = scoreGame(game([bigLead()], { winByLead: 150 }));
+    expect(s.status).toBe('won');
+    expect(s.winner).toBe(0);
+    expect(s.wonBy).toBe('lead');
+    expect(s.decidingHand).toBe(0);
+  });
+
+  it('a lead of exactly the margin wins; one point less does not', () => {
+    // Team 1 is set on 25; team 0 scores meld + all 25 trick points.
+    const exact = played({ bidder: 1, bid: 25, meld: [100, 0], tricks: [25, 0] });
+    const short = played({ bidder: 1, bid: 25, meld: [99, 0], tricks: [25, 0] });
+    const won = scoreGame(game([exact], { winByLead: 150 }));
+    expect(won.totals).toEqual([125, -25]);
+    expect(won.winner).toBe(0);
+    expect(won.wonBy).toBe('lead');
+    const notYet = scoreGame(game([short], { winByLead: 150 }));
+    expect(notYet.totals).toEqual([124, -25]);
+    expect(notYet.status).toBe('active');
+  });
+
+  it('the lead can come from the other team being set', () => {
+    const hands = [
+      played({ bidder: 0, bid: 25, meld: [80, 15], tricks: [20, 5] }),
+      // Team 1 bids 100 and is set: team 0 only gains 10, but now leads by 190.
+      played({ bidder: 1, bid: 100, meld: [0, 10], tricks: [10, 15] }),
+    ];
+    const s = scoreGame(game(hands, { winByLead: 150 }));
+    expect(s.results.map((r) => r.totals)).toEqual([
+      [100, 20],
+      [110, -80],
+    ]);
+    expect(s.winner).toBe(0);
+    expect(s.wonBy).toBe('lead');
+    expect(s.decidingHand).toBe(1);
+  });
+
+  it('works for either team, including a leader below zero', () => {
+    const hands = [
+      played({ bidder: 0, bid: 150, meld: [0, 0], tricks: [0, 25] }),
+      played({ bidder: 0, bid: 25, meld: [0, 0], tricks: [10, 15] }),
+    ];
+    const s = scoreGame(game(hands, { winByLead: 200 }));
+    expect(s.totals).toEqual([-175, 40]);
+    expect(s.winner).toBe(1);
+    expect(s.wonBy).toBe('lead');
+    expect(s.decidingHand).toBe(1);
+  });
+
+  it('when the target is reached on the same hand, the target rules decide as before', () => {
+    // Both teams cross 150; team 1 bid and made it, so it goes out first,
+    // even though team 0 leads by 125 (more than the margin).
+    const hands = [played({ bidder: 1, bid: 25, meld: [270, 140], tricks: [10, 15] })];
+    const s = scoreGame(game(hands, { winByLead: 100 }));
+    expect(s.totals).toEqual([280, 155]);
+    expect(s.winner).toBe(1);
+    expect(s.wonBy).toBe('target');
+
+    // One team reaching the target with a big lead is a normal target win.
+    const one = [played({ bidder: 0, bid: 25, meld: [140, 0], tricks: [20, 5] })];
+    const t = scoreGame(game(one, { winByLead: 100 }));
+    expect(t.totals).toEqual([160, 5]);
+    expect(t.wonBy).toBe('target');
+  });
+
+  it('editing an earlier hand recomputes whether the game was won', () => {
+    const h1 = played({ bidder: 1, bid: 25, meld: [100, 0], tricks: [25, 0] });
+    const h2 = played({ bidder: 0, bid: 25, meld: [0, 20], tricks: [15, 10] });
+    const won = scoreGame(game([h1, h2], { winByLead: 150 }));
+    expect(won.status).toBe('won');
+    expect(won.decidingHand).toBe(0);
+
+    // A smaller first hand: 140 ahead, then team 0 is set. Nobody has won.
+    const edited = { ...h1, meld: [90, 0] as [number, number] };
+    const s = scoreGame(game([edited, h2], { winByLead: 150 }));
+    expect(s.totals).toEqual([90, 5]);
+    expect(s.status).toBe('active');
+    expect(s.wonBy).toBeNull();
+
+    // Editing the second hand so team 1 is the one set: the lead grows and wins there.
+    const setTeam1 = { ...h2, bidder: 1 as Seat, meld: [0, 0] as [number, number] };
+    const later = scoreGame(game([edited, setTeam1], { winByLead: 150 }));
+    expect(later.totals).toEqual([130, -50]);
+    expect(later.status).toBe('won');
+    expect(later.wonBy).toBe('lead');
+    expect(later.decidingHand).toBe(1);
+  });
+
+  it('turning it on mid-game ends a game already ahead by the margin; off resumes it', () => {
+    // Scores are derived from the rules, so changing them re-decides the game.
+    const hands = [bigLead()];
+    expect(scoreGame(game(hands)).status).toBe('active');
+    expect(scoreGame(game(hands, { winByLead: 150 })).status).toBe('won');
+    expect(scoreGame(game(hands, { winByLead: 250 })).status).toBe('active');
+    expect(scoreGame(game(hands, { winByLead: null })).status).toBe('active');
+  });
+
+  it('does not change called games', () => {
+    const hands = [played({ bidder: 0, bid: 25, meld: [10, 5], tricks: [15, 10] })];
+    const s = scoreGame(game(hands, { winByLead: 150 }, { endedEarly: { kind: 'called', at: 1 } }));
+    expect(s.status).toBe('called');
+    expect(s.winner).toBe(0);
+    expect(s.wonBy).toBeNull();
+  });
+});
+
+describe('describeRules', () => {
+  it('mentions win by lead only when it is on', () => {
+    expect(describeRules(R).join('\n')).not.toMatch(/leading/);
+    expect(describeRules({ ...R, winByLead: 120 })).toContain('Also win by leading by 120');
   });
 });

@@ -29,6 +29,8 @@ export type ThrowInDefenderScoring = 'meld' | 'meldPlusAllTricks' | 'nothing';
 export interface Rules {
   /** Score a team must reach to win. */
   targetScore: number;
+  /** If set, a team also wins as soon as it leads by at least this many points. null = off. */
+  winByLead: number | null;
   /** Lowest legal opening bid. Also the forced bid when the dealer is stuck. */
   minBid: number;
   /** Trick points available per hand (counters + last trick). */
@@ -114,7 +116,7 @@ export interface Settings {
   keepAwake: boolean;
 }
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export interface DeletedGame {
   id: GameId;
