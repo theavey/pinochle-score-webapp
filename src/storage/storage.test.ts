@@ -3,7 +3,8 @@ import { initialState, reduce } from '../domain/reducer';
 import type { Action } from '../domain/reducer';
 import { DEFAULT_RULES } from '../domain/rules';
 import type { AppState } from '../domain/types';
-import { exportBackup, mergeStates, parseBackup } from './backup';
+import { SCHEMA_VERSION } from '../domain/types';
+import { exportBackup, mergeBackup, parseBackup } from './backup';
 import { STORAGE_KEY, loadState, saveState } from './persist';
 import { validateAppState } from './schema';
 
@@ -175,48 +176,59 @@ describe('backup', () => {
     expect(() => parseBackup('x'.repeat(3 * 1024 * 1024))).toThrow(/too large/);
   });
 
-  it('merges by player name and keeps the newest copy of each game', () => {
+  it('merges a backup by player name and keeps the newest copy of each game', () => {
     const current = sample();
-    const other = reduce(
-      reduce(initialState(), { type: 'addPlayer', id: 'q0', name: 'ann', now: 1 }),
-      { type: 'addPlayer', id: 'p1', name: 'Zed', now: 1 },
+    const incoming = ['q0', 'q1', 'q2', 'q3'].reduce<AppState>(
+      (st, id, i) =>
+        reduce(st, { type: 'addPlayer', id, name: ['ann', 'Zed', 'X', 'Y'][i] ?? id, now: 1 }),
+      initialState(),
     );
-    const withGame = ['q2', 'q3'].reduce<AppState>(
-      (s, id) => reduce(s, { type: 'addPlayer', id, name: id, now: 1 }),
-      other,
-    );
-    const incoming = reduce(withGame, {
+    const withGame = reduce(incoming, {
       type: 'createGame',
       id: 'g2',
-      seats: ['q0', 'p1', 'q2', 'q3'],
+      seats: ['q0', 'q1', 'q2', 'q3'],
       firstDealer: 0,
       rules: DEFAULT_RULES,
       now: 5,
     });
 
-    const merged = mergeStates(current, incoming);
+    const merged = mergeBackup(current, withGame);
     expect(merged.games.map((g) => g.id).sort()).toEqual(['g1', 'g2']);
-    const g2 = merged.games.find((g) => g.id === 'g2');
-    // "ann" matched existing "Ann" (p0); "Zed" clashed on id p1 and got a new id.
-    expect(g2?.seats[0]).toBe('p0');
-    expect(g2?.seats[1]).not.toBe('p1');
-    expect(merged.players.find((p) => p.id === g2?.seats[1])?.name).toBe('Zed');
-    expect(merged.players.find((p) => p.id === 'p1')?.name).toBe('Bob');
+    // "ann" is the same person as "Ann" (p0), so g2 now refers to p0.
+    expect(merged.games.find((g) => g.id === 'g2')?.seats[0]).toBe('p0');
+    expect(merged.players.map((p) => p.name).sort()).toEqual(
+      ['Ann', 'Bob', 'Cy', 'Di', 'X', 'Y', 'Zed'].sort(),
+    );
 
     // Older copy of an existing game does not overwrite the newer one.
     const stale = {
       ...sample(),
       games: sample().games.map((g) => ({ ...g, hands: [], updatedAt: 0 })),
     };
-    expect(mergeStates(current, stale).games.find((g) => g.id === 'g1')?.hands).toHaveLength(1);
+    expect(mergeBackup(current, stale).games.find((g) => g.id === 'g1')?.hands).toHaveLength(1);
   });
 });
 
-describe('migration v1 -> v2', () => {
+describe('migrating older saves', () => {
   /** A v1 save: the draft stored the bidding team's trick points. */
+  /** A save as v2 wrote it: no player updatedAt, no tombstones. */
+  function v2State(): Record<string, unknown> {
+    const s = JSON.parse(JSON.stringify(sample())) as Record<string, unknown> & {
+      players: Record<string, unknown>[];
+    };
+    s.schemaVersion = 2;
+    delete s.tombstones;
+    s.players = s.players.map((p) => {
+      const rest = { ...p };
+      delete rest.updatedAt;
+      return rest;
+    });
+    return s;
+  }
+
+  /** A save as v1 wrote it: also, the draft stored the bidding team's tricks. */
   function v1(draftPatch: Record<string, unknown>): string {
-    const s = JSON.parse(JSON.stringify(sample())) as {
-      schemaVersion: number;
+    const s = v2State() as Record<string, unknown> & {
       games: { draft: Record<string, unknown> }[];
     };
     s.schemaVersion = 1;
@@ -228,12 +240,23 @@ describe('migration v1 -> v2', () => {
     return JSON.stringify(s);
   }
 
+  it('loads a v2 save: players get updatedAt, tombstones start empty', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(STORAGE_KEY, JSON.stringify(v2State()));
+    const res = loadState(storage);
+    expect(res.warning).toBeNull();
+    expect(res.state.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(res.state.tombstones).toEqual({ games: [], players: [] });
+    for (const p of res.state.players) expect(p.updatedAt).toBe(p.createdAt);
+    expect(res.state.games).toEqual(sample().games);
+  });
+
   it('converts a half-entered hand to the defending team’s trick points', () => {
     const storage = new MemoryStorage();
     storage.setItem(STORAGE_KEY, v1({ bidder: 0, bidderTricks: '18' }));
     const res = loadState(storage);
     expect(res.warning).toBeNull();
-    expect(res.state.schemaVersion).toBe(2);
+    expect(res.state.schemaVersion).toBe(SCHEMA_VERSION);
     // 25 trick points per hand: bidders had 18, so defenders had 7.
     expect(res.state.games[0]?.draft?.defenderTricks).toBe('7');
     expect(res.state.games[0]?.draft).not.toHaveProperty('bidderTricks');

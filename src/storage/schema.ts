@@ -1,6 +1,6 @@
 import { MAX_NAME_LENGTH } from '../domain/reducer';
 import { RULE_LIMITS } from '../domain/rules';
-import type { AppState, Game, Hand, HandDraft, Player, Rules } from '../domain/types';
+import type { AppState, Game, Hand, HandDraft, Player, Rules, Tombstones } from '../domain/types';
 import { SCHEMA_VERSION } from '../domain/types';
 import {
   ValidationError,
@@ -19,6 +19,7 @@ import type { Validator } from './validate';
 const LIMITS = {
   players: 1_000,
   games: 5_000,
+  tombstones: 10_000,
   handsPerGame: 500,
 };
 
@@ -32,6 +33,12 @@ const player: Validator<Player> = obj({
   id,
   name: str({ min: 1, max: MAX_NAME_LENGTH }),
   createdAt: time,
+  updatedAt: time,
+});
+
+const tombstones: Validator<Tombstones> = obj({
+  games: arr(obj({ id, at: time }), { max: LIMITS.tombstones }),
+  players: arr(obj({ id, at: time, mergedInto: nullable(id) }), { max: LIMITS.tombstones }),
 });
 
 export const rulesValidator: Validator<Rules> = obj({
@@ -109,6 +116,7 @@ export function validateAppState(raw: unknown): AppState {
     schemaVersion: oneOf(SCHEMA_VERSION),
     players: arr(player, { max: LIMITS.players }),
     games: arr(game, { max: LIMITS.games }),
+    tombstones,
     defaultRules: rulesValidator,
     settings: obj({ keepAwake: bool }),
   })(raw, '');

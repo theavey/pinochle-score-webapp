@@ -1,4 +1,5 @@
-import type { AppState, Game, PlayerId, SeatQuad } from '../domain/types';
+import { mergeStates } from '../domain/merge';
+import type { AppState } from '../domain/types';
 import { migrate } from './persist';
 import { validateAppState } from './schema';
 import { ValidationError } from './validate';
@@ -49,48 +50,10 @@ export function parseBackup(text: string): AppState {
 }
 
 /**
- * Merge an imported backup into the current data without losing anything:
- * players with the same name are treated as the same person, and when both
- * sides have the same game the most recently updated copy wins.
+ * Merge an imported backup into the current data without losing anything
+ * (see mergeStates in src/domain/merge.ts for the rules). The result is
+ * re-validated so a merge can never produce data that won't load.
  */
-export function mergeStates(current: AppState, incoming: AppState): AppState {
-  const players = [...current.players];
-  const byId = new Map(players.map((p) => [p.id, p]));
-  const byName = new Map(players.map((p) => [p.name.toLocaleLowerCase(), p]));
-  const remap = new Map<PlayerId, PlayerId>();
-
-  for (const p of incoming.players) {
-    const sameName = byName.get(p.name.toLocaleLowerCase());
-    if (sameName) {
-      remap.set(p.id, sameName.id);
-    } else if (byId.has(p.id)) {
-      // Same id, different name: keep both people, give the import a new id.
-      const fresh = `${p.id}-${crypto.randomUUID().slice(0, 8)}`;
-      remap.set(p.id, fresh);
-      const np = { ...p, id: fresh };
-      players.push(np);
-      byName.set(np.name.toLocaleLowerCase(), np);
-    } else {
-      players.push(p);
-      byId.set(p.id, p);
-      byName.set(p.name.toLocaleLowerCase(), p);
-    }
-  }
-
-  const map = (q: SeatQuad<PlayerId>) => q.map((id) => remap.get(id) ?? id) as SeatQuad<PlayerId>;
-  const fix = (g: Game): Game => ({
-    ...g,
-    seats: map(g.seats),
-    hands: g.hands.map((h) => ({ ...h, players: map(h.players) })),
-  });
-
-  const games = new Map(current.games.map((g) => [g.id, g]));
-  for (const g of incoming.games) {
-    const existing = games.get(g.id);
-    if (!existing || g.updatedAt > existing.updatedAt) games.set(g.id, fix(g));
-  }
-
-  const merged = { ...current, players, games: [...games.values()] };
-  // Re-validate so a merge can never produce a state we can't load later.
-  return validateAppState(merged);
+export function mergeBackup(current: AppState, incoming: AppState): AppState {
+  return validateAppState(mergeStates(current, incoming));
 }

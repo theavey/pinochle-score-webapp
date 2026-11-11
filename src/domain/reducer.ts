@@ -23,6 +23,7 @@ export function initialState(): AppState {
     schemaVersion: SCHEMA_VERSION,
     players: [],
     games: [],
+    tombstones: { games: [], players: [] },
     defaultRules: { ...DEFAULT_RULES },
     settings: { keepAwake: true },
   };
@@ -40,9 +41,9 @@ export function findPlayerByName(state: AppState, name: string): Player | undefi
 
 export type Action =
   | { type: 'addPlayer'; id: PlayerId; name: string; now: number }
-  | { type: 'renamePlayer'; id: PlayerId; name: string }
-  | { type: 'deletePlayer'; id: PlayerId }
-  | { type: 'mergePlayers'; from: PlayerId; into: PlayerId }
+  | { type: 'renamePlayer'; id: PlayerId; name: string; now: number }
+  | { type: 'deletePlayer'; id: PlayerId; now: number }
+  | { type: 'mergePlayers'; from: PlayerId; into: PlayerId; now: number }
   | {
       type: 'createGame';
       id: GameId;
@@ -58,10 +59,16 @@ export type Action =
   | { type: 'setSeat'; gameId: GameId; seat: Seat; playerId: PlayerId; now: number }
   | { type: 'endGame'; gameId: GameId; kind: 'called' | 'abandoned'; now: number }
   | { type: 'reopenGame'; gameId: GameId; now: number }
-  | { type: 'deleteGame'; gameId: GameId }
+  | { type: 'deleteGame'; gameId: GameId; now: number }
   | { type: 'setDefaultRules'; rules: Rules }
   | { type: 'setSettings'; settings: Partial<Settings> }
-  | { type: 'replaceState'; state: AppState };
+  | { type: 'replaceState'; state: AppState }
+  /**
+   * Undo: go back to an earlier snapshot, recorded as a new change (restored
+   * items get `now`, items that disappear get tombstones) so that merging
+   * with another device's newer copy doesn't undo the undo.
+   */
+  | { type: 'restore'; state: AppState; now: number };
 
 export class ActionError extends Error {}
 
@@ -84,6 +91,36 @@ function replaceId(quad: SeatQuad<PlayerId>, from: PlayerId, into: PlayerId): Se
   return quad.map((p) => (p === from ? into : p)) as SeatQuad<PlayerId>;
 }
 
+function restoreSnapshot(current: AppState, prev: AppState, now: number): AppState {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const curGames = new Map(current.games.map((g) => [g.id, g]));
+  const curPlayers = new Map(current.players.map((p) => [p.id, p]));
+  const prevGameIds = new Set(prev.games.map((g) => g.id));
+  const prevPlayerIds = new Set(prev.players.map((p) => p.id));
+
+  const games = prev.games.map((g) => (same(g, curGames.get(g.id)) ? g : { ...g, updatedAt: now }));
+  const players = prev.players.map((p) =>
+    same(p, curPlayers.get(p.id)) ? p : { ...p, updatedAt: now },
+  );
+  return {
+    ...prev,
+    games,
+    players,
+    tombstones: {
+      games: [
+        ...prev.tombstones.games.filter((t) => !prevGameIds.has(t.id)),
+        ...current.games.filter((g) => !prevGameIds.has(g.id)).map((g) => ({ id: g.id, at: now })),
+      ],
+      players: [
+        ...prev.tombstones.players.filter((t) => !prevPlayerIds.has(t.id)),
+        ...current.players
+          .filter((p) => !prevPlayerIds.has(p.id))
+          .map((p) => ({ id: p.id, at: now, mergedInto: null })),
+      ],
+    },
+  };
+}
+
 /**
  * Pure state transition. Throws ActionError for invalid requests so the UI
  * can show a message; never partially applies an action.
@@ -96,7 +133,10 @@ export function reduce(state: AppState, action: Action): AppState {
       if (findPlayerByName(state, name)) throw new ActionError(`${name} already exists`);
       return {
         ...state,
-        players: [...state.players, { id: action.id, name, createdAt: action.now }],
+        players: [
+          ...state.players,
+          { id: action.id, name, createdAt: action.now, updatedAt: action.now },
+        ],
       };
     }
     case 'renamePlayer': {
@@ -106,14 +146,26 @@ export function reduce(state: AppState, action: Action): AppState {
       if (clash && clash.id !== action.id) throw new ActionError(`${name} already exists`);
       return {
         ...state,
-        players: state.players.map((p) => (p.id === action.id ? { ...p, name } : p)),
+        players: state.players.map((p) =>
+          p.id === action.id ? { ...p, name, updatedAt: action.now } : p,
+        ),
       };
     }
     case 'deletePlayer': {
       if (playerInUse(state, action.id)) {
         throw new ActionError('This player appears in saved games. Merge them instead.');
       }
-      return { ...state, players: state.players.filter((p) => p.id !== action.id) };
+      return {
+        ...state,
+        players: state.players.filter((p) => p.id !== action.id),
+        tombstones: {
+          ...state.tombstones,
+          players: [
+            ...state.tombstones.players,
+            { id: action.id, at: action.now, mergedInto: null },
+          ],
+        },
+      };
     }
     case 'mergePlayers': {
       const { from, into } = action;
@@ -132,6 +184,10 @@ export function reduce(state: AppState, action: Action): AppState {
       return {
         ...state,
         players: state.players.filter((p) => p.id !== from),
+        tombstones: {
+          ...state.tombstones,
+          players: [...state.tombstones.players, { id: from, at: action.now, mergedInto: into }],
+        },
         games: state.games.map((g) => ({
           ...g,
           seats: replaceId(g.seats, from, into),
@@ -158,7 +214,13 @@ export function reduce(state: AppState, action: Action): AppState {
       return { ...state, games: [...state.games, game], defaultRules: { ...action.rules } };
     }
     case 'setDraft':
-      return updateGame(state, action.gameId, (g) => ({ ...g, draft: action.draft }));
+      // Counts as an update, so a half-entered hand is the newest copy when
+      // devices merge (another device's table display can show the live bid).
+      return updateGame(state, action.gameId, (g) => ({
+        ...g,
+        draft: action.draft,
+        updatedAt: action.now,
+      }));
     case 'saveHand':
       return updateGame(state, action.gameId, (g) => {
         const existing = g.hands.find((h) => h.id === action.handId);
@@ -211,12 +273,21 @@ export function reduce(state: AppState, action: Action): AppState {
         updatedAt: action.now,
       }));
     case 'deleteGame':
-      return { ...state, games: state.games.filter((g) => g.id !== action.gameId) };
+      return {
+        ...state,
+        games: state.games.filter((g) => g.id !== action.gameId),
+        tombstones: {
+          ...state.tombstones,
+          games: [...state.tombstones.games, { id: action.gameId, at: action.now }],
+        },
+      };
     case 'setDefaultRules':
       return { ...state, defaultRules: { ...action.rules } };
     case 'setSettings':
       return { ...state, settings: { ...state.settings, ...action.settings } };
     case 'replaceState':
       return action.state;
+    case 'restore':
+      return restoreSnapshot(state, action.state, action.now);
   }
 }

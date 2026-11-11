@@ -220,7 +220,7 @@ export function GameMenu({ game, score }: { game: Game; score: GameScore }) {
         onConfirm={() => {
           close();
           navigate({ name: 'home' }, true);
-          dispatch({ type: 'deleteGame', gameId: game.id }, 'Game deleted');
+          dispatch({ type: 'deleteGame', gameId: game.id, now: Date.now() }, 'Game deleted');
         }}
       />
     </>

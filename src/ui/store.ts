@@ -84,8 +84,10 @@ export function dispatch(action: Action, undoMessage?: string): boolean {
 export function undo() {
   const prev = undoStack.pop();
   if (!prev) return;
-  emit({ state: prev });
-  persist(prev);
+  // Recorded as a new change, so a synced copy doesn't bring the undone change back.
+  const next = reduce(snapshot.state, { type: 'restore', state: prev, now: Date.now() });
+  emit({ state: next });
+  persist(next);
   showToast('Undone');
 }
 
