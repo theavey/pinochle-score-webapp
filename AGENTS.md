@@ -40,16 +40,16 @@ Notes:
 
 ## Layout
 
-| Path           | Contents                                                                                                                                                                                                                                       |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/domain/`  | Pure game logic: `types.ts`, `scoring.ts`, `draft.ts` (form input → hand), `reducer.ts` (all state changes), `merge.ts` (merging two copies of the data), `stats.ts`, `seats.ts`, `rules.ts`. Unit-tested.                                     |
-| `src/storage/` | `validate.ts` (validators), `schema.ts` (full-state validation), `persist.ts` (localStorage, migrations), `backup.ts` (export/import/merge). Unit-tested.                                                                                      |
-| `src/ui/`      | `store.ts` (dispatch, undo, persistence), `router.ts` (hash routes), `screens/` (`game/TableView.tsx` is the big-score table display), `components/`, hooks (`useMediaQuery`, `useWakeLock`).                                                  |
-| `src/sync/`    | `crypto.ts` (sync codes, HKDF keys, gzip + AES-GCM), `engine.ts` (pull, merge, push, live socket), `protocol.ts` (API contract shared with the Worker).                                                                                        |
-| `src/worker/`  | Cloudflare Worker for `/api/sync/*`: `index.ts` (routing, origin check, rate limit) and `syncGroup.ts` (Durable Object: one encrypted blob per group, versioned writes, WebSocket notices). Own `tsconfig.json` with Cloudflare runtime types. |
-| `scripts/`     | `sw-plugin.ts` + `sw-template.js` (generates `dist/sw.js`), `generate-icons.mjs`.                                                                                                                                                              |
-| `public/`      | `_headers` (CSP and other security headers, caching), manifest, icons.                                                                                                                                                                         |
-| `tests/e2e/`   | Playwright specs and `helpers.ts`.                                                                                                                                                                                                             |
+| Path           | Contents                                                                                                                                                                                                                                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/domain/`  | Pure game logic: `types.ts`, `scoring.ts`, `draft.ts` (form input → hand), `reducer.ts` (all state changes), `merge.ts` (merging two copies of the data), `stats.ts`, `seats.ts`, `rules.ts`. Unit-tested.                                                                                                  |
+| `src/storage/` | `validate.ts` (validators), `schema.ts` (full-state validation), `persist.ts` (localStorage, migrations), `backup.ts` (export/import/merge). Unit-tested.                                                                                                                                                   |
+| `src/ui/`      | `store.ts` (dispatch, undo, persistence), `router.ts` (hash routes), `screens/` (`game/TableView.tsx` is the big-score table display), `components/`, hooks (`useMediaQuery`, `useWakeLock`).                                                                                                               |
+| `src/sync/`    | `crypto.ts` (sync codes, HKDF keys, gzip + AES-GCM, one-time invite codes), `engine.ts` (pull, merge, push, live socket, invites), `protocol.ts` (API contract shared with the Worker).                                                                                                                     |
+| `src/worker/`  | Cloudflare Worker for `/api/sync/*`: `index.ts` (routing, origin check, rate limit) and `syncGroup.ts` (Durable Object: one encrypted blob per group, versioned writes, WebSocket notices) and `invite.ts` (Durable Object: one-time, one-hour invites). Own `tsconfig.json` with Cloudflare runtime types. |
+| `scripts/`     | `sw-plugin.ts` + `sw-template.js` (generates `dist/sw.js`), `generate-icons.mjs`.                                                                                                                                                                                                                           |
+| `public/`      | `_headers` (CSP and other security headers, caching), manifest, icons.                                                                                                                                                                                                                                      |
+| `tests/e2e/`   | Playwright specs and `helpers.ts`.                                                                                                                                                                                                                                                                          |
 
 ## Rules
 
@@ -85,6 +85,8 @@ give the same games, players and tombstones, so devices converge.
 
 - The server must never see plaintext: everything uploaded goes through `encrypt()` in
   `src/sync/crypto.ts`, and `tests/e2e/sync.spec.ts` checks uploads contain no player names.
+- Never show or share the permanent sync code; devices join through one-time invites
+  (`createInvite` / `joinWithInvite`), claimed only when the person taps Join.
 - Data downloaded from the server is untrusted: decrypt, then `migrate()` and `validateAppState`,
   then `mergeStates`.
 - After changing `wrangler.jsonc` (bindings, Durable Objects), run `npm run types:worker` to

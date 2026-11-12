@@ -2,14 +2,21 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { startGame, watchConsole } from './helpers';
 
-/** Turn sync on from Settings and return this device's sync code. */
+const INVITE = /^[0-9A-Z]{5}-[0-9A-Z]{5}$/;
+
+/** The invite code Settings shows after "Start syncing" or "Invite a device". */
+async function shownInvite(page: Page): Promise<string> {
+  const code = page.getByLabel('Invite code', { exact: true });
+  await expect(code).toBeVisible({ timeout: 10_000 });
+  return (await code.innerText()).trim();
+}
+
+/** Turn sync on from Settings and return the one-time invite it makes. */
 async function startSyncing(page: Page): Promise<string> {
   await page.goto('/#/settings');
   await page.getByRole('button', { name: 'Start syncing' }).click();
   await expect(page.getByText('Synced', { exact: true })).toBeVisible({ timeout: 10_000 });
-  const code = page.getByLabel('Sync code', { exact: true });
-  if (!(await code.isVisible())) await page.getByRole('button', { name: 'Show code' }).click();
-  return (await code.innerText()).trim();
+  return shownInvite(page);
 }
 
 test('two devices sync games, live bids and deletions, encrypted', async ({ page, browser }) => {
@@ -24,7 +31,7 @@ test('two devices sync games, live bids and deletions, encrypted', async ({ page
   await startGame(page);
   const gameUrl = page.url();
   const code = await startSyncing(page);
-  expect(code).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
+  expect(code).toMatch(INVITE);
   expect(uploads.length).toBeGreaterThan(0);
   for (const body of uploads) {
     expect(body).not.toMatch(/Ann|Bob|"players"|"games"/);
@@ -37,7 +44,7 @@ test('two devices sync games, live bids and deletions, encrypted', async ({ page
   await b.goto(`/#/join/${code}`);
   await b.getByRole('button', { name: 'Join' }).click();
   await expect(b.getByText('Synced', { exact: true })).toBeVisible({ timeout: 10_000 });
-  // The secret code is not left in the address bar.
+  // The (now used) invite is not left in the address bar.
   expect(b.url()).not.toContain(code);
   await b.goto('/#/history');
   await expect(b.getByText('Ann & Cy')).toBeVisible({ timeout: 10_000 });
@@ -72,8 +79,53 @@ test('two devices sync games, live bids and deletions, encrypted', async ({ page
   await ctxB.close();
 });
 
-test('an invalid invite link is refused', async ({ page }) => {
+test('an invite works once', async ({ page, browser }) => {
+  const errors = watchConsole(page);
+  const code = await startSyncing(page);
+
+  const ctxB = await browser.newContext();
+  const b = await ctxB.newPage();
+  await b.goto(`/#/join/${code}`);
+  // Opening the link alone doesn't use it up (link previews, accidental opens).
+  await expect(b.getByRole('heading', { name: 'Join this sync group?' })).toBeVisible();
+  const ctxC = await browser.newContext();
+  const c = await ctxC.newPage();
+  await c.goto(`/#/join/${code}`);
+  await c.getByRole('button', { name: 'Join' }).click();
+  await expect(c.getByText('Synced', { exact: true })).toBeVisible({ timeout: 10_000 });
+
+  // Now it's used: B can't join with it.
+  await b.getByRole('button', { name: 'Join' }).click();
+  await expect(b.getByRole('heading', { name: 'Invite already used or expired' })).toBeVisible();
+  expect(errors).toEqual([]);
+  await ctxB.close();
+  await ctxC.close();
+});
+
+test('joins by typing an invite code', async ({ page, browser }) => {
+  await startGame(page);
+  await startSyncing(page);
+  // A fresh invite from "Invite a device" (the first one is still unused; both work).
+  await page.getByRole('button', { name: 'Invite a device' }).click();
+  const code = await shownInvite(page);
+
+  const ctxB = await browser.newContext();
+  const b = await ctxB.newPage();
+  await b.goto('/#/settings');
+  await b.getByRole('button', { name: 'Join with a code' }).click();
+  await b.getByLabel('Invite code', { exact: true }).fill(code.toLowerCase().replace('-', ' '));
+  await b.getByRole('button', { name: 'Join', exact: true }).click();
+  await expect(b.getByText('Synced', { exact: true })).toBeVisible({ timeout: 10_000 });
+  await b.goto('/#/history');
+  await expect(b.getByText('Ann & Cy')).toBeVisible({ timeout: 10_000 });
+  await ctxB.close();
+});
+
+test('invalid and old-style invite links are refused', async ({ page }) => {
   await page.goto('/#/join/NOT-A-REAL-CODE-UUUU-UUUU-UUUU');
+  await expect(page.getByRole('heading', { name: 'Invite link not valid' })).toBeVisible();
+  // Links that carried the permanent sync code no longer work.
+  await page.goto('/#/join/0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ');
   await expect(page.getByRole('heading', { name: 'Invite link not valid' })).toBeVisible();
 });
 
